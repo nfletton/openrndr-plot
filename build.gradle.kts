@@ -1,6 +1,7 @@
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 import org.gradle.internal.os.OperatingSystem
 import org.gradle.nativeplatform.platform.internal.DefaultNativePlatform
+import org.jetbrains.kotlin.gradle.dsl.KotlinVersion
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 group = "org.openrndr.template"
@@ -14,7 +15,7 @@ val orxFeatures = setOf<String>(
     "orx-camera",
 //  "orx-chataigne",
     "orx-color",
-//  "orx-composition",
+    "orx-composition",
     "orx-compositor",
 //  "orx-compute-graph",
 //  "orx-compute-graph-nodes",
@@ -60,7 +61,7 @@ val orxFeatures = setOf<String>(
     "orx-shade-styles",
 //  "orx-shader-phrases",
     "orx-shapes",
-//  "orx-svg",
+    "orx-svg",
 //  "orx-syphon",
 //  "orx-temporal-blur",
 //  "orx-tensorflow",
@@ -157,6 +158,12 @@ dependencies {
 java {
     sourceCompatibility = JavaVersion.VERSION_11
     targetCompatibility = JavaVersion.VERSION_11
+}
+kotlin {
+    compilerOptions {
+        languageVersion.set(KotlinVersion.KOTLIN_2_0)
+        apiVersion.set(KotlinVersion.KOTLIN_2_0)
+    }
 }
 tasks.withType<KotlinCompile> {
     kotlinOptions.jvmTarget = "11"
