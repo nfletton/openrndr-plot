@@ -1,68 +1,40 @@
-# OPENRNDR template project
+# OPENRNDR Plot
 
-A feature rich template for creating OPENRNDR programs based on [Gradle/Kts](https://en.wikipedia.org/wiki/Gradle).
+OPENRNDR Plot is a work in progress to create an addon for 
+[OPENRNDR](https://github.com/openrndr/openrndr) that generates
+commands to drive the [AxiDraw Python API](https://axidraw.com/doc/py_api/).
 
-The template consists of a configuration for Gradle and two example OPENRNDR programs. The Gradle configuration should serve as the
-go-to starting point for writing OPENRNDR-based software.
+The goal is to offer more control and flexibility over the plotter's
+operation that can be easily achieved by driving the plotter from an SVG
+file. 
 
-If you are looking at this from IntelliJ IDEA you can start by expanding the _project_ tab on the left. You will find a template program in `src/main/kotlin/TemplateProgram.kt` and a live-coding example in `src/main/kotlin/TemplateLiveProgram.kt`.
+Particular use cases where plotting via the API may be beneficial include:
 
-You will find some [basic instructions](https://guide.openrndr.org/setUpYourFirstProgram.html) in the [OPENRNDR guide](https://guide.openrndr.org)
+- Using multiple pens
+- Long plots
+- Using a paintbrush
 
-## Gradle tasks
+## Outputs
+OPENRNDR Plot generates three outputs:
+1. A text file containing commands consumed by
+   [Plot Director](https://github.com/nfletton/plot-director) to drive the AxiDraw
+   plotter via the Python API.
+2. An SVG file of the plot scaled to the paper size being used.
+3. An SVG file of the plot area layout including paper position and, 
+   potential paint and wash wells.
 
- - `./gradlew run` runs the TemplateProgram (Use `gradlew.bat run` under Windows)
- - `./gradlew shadowJar` creates an executable platform specific jar file with all dependencies. Run the resulting program by typing `java -jar build/libs/openrndr-template-1.0.0-all.jar` in a terminal from the project root.
- - `./gradlew jpackageZip` creates a zip with a stand-alone executable for the current platform (works with Java 14 only)
+## Usage
+See `demos` directory
 
-## Cross builds
+## Issues
+- Misuse of SVG groups for layers
 
-To create a runnable jar for a platform different from your current platform, use `./gradlew jar -PtargetPlatform=<platform>`, where `<platform>` is either `windows`, `macos`, `linux-x64`, or `linux-arm64`. 
-
-## Updating OPENRNDR, ORX and other dependencies
-
-The openrndr-template depends on various packages including the core [openrndr](https://github.com/openrndr/openrndr/) and the [orx](https://github.com/openrndr/orx/) extensions. The version numbers of these dependencies are specified in your [libs.versions.toml](gradle/libs.versions.toml) file. If you want to learn about file format visit the [Gradle documentation](https://docs.gradle.org/current/userguide/platforms.html#sub:conventional-dependencies-toml) website.
-
-Newer versions of OPENRNDR and ORX bring useful features and bug fixes. The most recent versions are
-<br>![openrndr version](https://maven-badges.herokuapp.com/maven-central/org.openrndr/openrndr-application/badge.svg) for OPENRNDR. 
-<br>![orx version](https://maven-badges.herokuapp.com/maven-central/org.openrndr.extra/orx-parameters-jvm/badge.svg) for ORX.
-
-Switch to the [next-version branch](https://github.com/openrndr/openrndr-template/tree/next-version) or enter these version numbers in your toml file. They can look like "0.4.3" or "0.4.3-alpha4". Use the complete string, as in:
-
-    openrndr = "0.4.3-alpha4"
-        orx = "0.4.3-alpha4"
-
-You can add other dependencies needed by your project to your [build.gradle.kts](build.gradle.kts) file, inside the `dependencies { }` block. 
-
-Remember to reload the Gradle configuration after changing any dependencies.
-
-## Run other Kotlin programs from the command line
-
-By default `./gradlew run` runs a program called `TemplateProgram.kt` but a different one can be provided as an argument:
-
-To run `src/main/kotlin/myProgram.kt`
-
-    ./gradlew run -Popenrndr.application=MyProgramKt
-
-To run `src/main/kotlin/foo/bar/myProgram.kt` (assuming `package foo.bar` in myProgram.kt)
-
-    ./gradlew run -Popenrndr.application=foo.bar.MyProgramKt
-
-## Github Actions
-
-This repository contains a number of Github Actions under `./github/workflows`.
-
-[build-on-commit.yaml](.github/workflows/build-on-commit.yaml) runs a basic build on every commit, 
-which can help detect issues in the source code.
-
-[publish-binaries.yaml](.github/workflows/publish-binaries.yaml) publishes binaries for Linux, Mac and Windows 
-any time a commit is tagged with a version number like `v1.*`. 
-
-For example, we can create and push a tag with these git commands:
-
-    git tag -a v1.0.0 -m "v1.0.0"
-    git push origin v1.0.0
-
-The progress of the running actions can be followed under the Actions tab in GitHub. 
-Once complete, the executables will be found under the Releases section.
+## Feature Wishlist
+- maintain a list of warnings and display them at the top of the output file as comments
+- add stages for stopping and restarting plots (these can double as pause points)
+- instead of explicit stages, maybe distance traveled
+- pause after distance travelled e.g. for a manual ink pen refill
+- provide config for different AxiDraw pen options for painting, refilling and stirring
+- hatch fill - indicated by fill attribute
+- handle small circles as dots
 
