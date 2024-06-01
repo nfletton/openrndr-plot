@@ -1,4 +1,4 @@
-rootProject.name = "openrndr-template"
+rootProject.name = "openrndr-plot"
 
 pluginManagement {
     repositories {

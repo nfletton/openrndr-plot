@@ -150,7 +150,7 @@ dependencies {
         }
     }
     implementation(kotlin("stdlib-jdk8"))
-    testImplementation(libs.junit)
+    testImplementation(kotlin("test"))
 }
 
 // ------------------------------------------------------------------------------------------------------------------ //
