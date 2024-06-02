@@ -19,12 +19,15 @@ Particular use cases where plotting via the API may be beneficial include:
 OPENRNDR Plot generates three outputs:
 1. A text file containing commands consumed by
    [Plot Director](https://github.com/nfletton/plot-director) to drive the AxiDraw
-   plotter via the Python API.
+   plotter via the Python API. Details of the command file are 
+   [here](https://github.com/nfletton/plot-director/tree/master?#command-input-file-format)
 2. An SVG file of the plot scaled to the paper size being used. Plotting this file
    using Inkscape and the AxiDraw extension should (if OPENRNDR Plot is working 
    correctly!) scribe the exact same path as using the command file method above.
-3. An SVG file of the plot area layout including paper position and, 
-   potential paint and wash wells.
+3. An SVG file of the plot area layout including paper, 
+   paint well and wash well positions. 
+   This file is useful for drawing the outline of these elements 
+   before laying them out.
 
 ## Usage
 See `demos` directory
