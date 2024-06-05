@@ -5,6 +5,10 @@ import PlotConfig
 import org.openrndr.KEY_SPACEBAR
 import org.openrndr.application
 import org.openrndr.color.ColorRGBa
+import org.openrndr.extra.color.presets.BLUE_STEEL
+import org.openrndr.extra.color.presets.CHOCOLATE
+import org.openrndr.extra.color.presets.DARK_GREEN
+import org.openrndr.extra.color.presets.INDIGO
 import org.openrndr.extra.composition.composition
 import org.openrndr.extra.composition.drawComposition
 import org.openrndr.math.IntVector2
@@ -27,15 +31,47 @@ fun main() = application {
         width = (PaperSize.A5.height * screenScale).toInt()
         height = (PaperSize.A5.width * screenScale).toInt()
         position = IntVector2(-width - 15, 50)
-        title = "AxiDraw Demo 1 - Simple Shapes"
+        title = "AxiDraw Demo 3 - Pain and Wash Wells"
     }
     program {
+        val colorPalette = mapOf(
+            ColorRGBa.BLUE_STEEL to "blue",
+            ColorRGBa.CHOCOLATE to "chocolate",
+            ColorRGBa.INDIGO to "indigo",
+            ColorRGBa.MAGENTA to "magenta",
+            ColorRGBa.DARK_GREEN to "green",
+        )
+
+        val paintWells = mapOf(
+            ColorRGBa.BLUE_STEEL  to listOf(Rectangle(20.0, 40.0, 30.0, 20.0)),
+            ColorRGBa.CHOCOLATE  to listOf(Rectangle(20.0, 60.0, 30.0, 20.0)),
+            ColorRGBa.INDIGO  to listOf(Rectangle(20.0, 80.0, 30.0, 20.0)),
+            ColorRGBa.MAGENTA  to listOf(Rectangle(20.0, 100.0, 30.0, 20.0)),
+            ColorRGBa.DARK_GREEN  to listOf(
+                Rectangle(20.0, 120.0, 30.0, 20.0),
+                Rectangle(20.0, 140.0, 30.0, 20.0)
+            ),
+        )
+
+        val washWells: List<Rectangle> = listOf(
+            Rectangle(0.0, 0.0, 50.0, 40.0),
+            Rectangle(0.0, 240.0, 50.0, 40.0),
+            Rectangle(370.0, 0.0, 50.0, 40.0),
+        )
+
         val plotConfig = PlotConfig(
+            toolType = DrawTool.DIP_AND_STIR,
             displayScale = screenScale,
             paperSize = PaperSize.A5,
+            palette = colorPalette,
+            refillDistance = 200.0,
+            paintWells = paintWells,
+            washWells = washWells,
+            paperOffset = Vector2(57.0, 0.0)
         )
 
         val border = Vector2(20.0.fromMillimetres(), 20.0.fromMillimetres())
+
         val drawArea = Rectangle(border.x, border.y, width - 2 * border.x, height - 2 * border.y)
 
         // map unit interval measurements within draw area to absolute pixel
@@ -47,14 +83,18 @@ fun main() = application {
 
         val composition = drawComposition {
             fill = ColorRGBa.WHITE
-            stroke = ColorRGBa.BLACK
+            stroke = ColorRGBa.DARK_GREEN
             strokeWeight = 1.0
+            // default 'base' layer
             rectangle(drawArea)
             fill = null
             strokeWeight = 0.6.fromMillimetres()
-            circle(Circle(p(Vector2(0.5, 0.5)), 25.0.fromMillimetres()))
+            // 'layer1'
+            stroke = ColorRGBa.CHOCOLATE
+            circle(Circle(p(Vector2(0.5, 0.5)), 25.0.fromMillimetres()))?.attributes?.set("layer", "layer1")
             shape(Triangle(p(Vector2(0.2, 0.2)), p(Vector2(0.8, 0.2)), p(Vector2(0.5, 0.8))).shape)
-            lineSegment(p(Vector2(0.5, 0.5)), p(Vector2(0.2, 0.2)))
+            stroke = ColorRGBa.BLUE_STEEL
+            lineSegment(p(Vector2(0.5, 0.5)), p(Vector2(0.2, 0.2)))?.attributes?.set("layer", "layer2")
             lineSegment(p(Vector2(0.5, 0.5)), p(Vector2(0.8, 0.2)))
             lineSegment(p(Vector2(0.5, 0.5)), p(Vector2(0.5, 0.8)))
         }

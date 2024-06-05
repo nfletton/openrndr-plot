@@ -11,6 +11,7 @@ import org.openrndr.math.IntVector2
 import org.openrndr.math.Vector2
 import org.openrndr.namedTimestamp
 import org.openrndr.shape.Circle
+import org.openrndr.shape.LineSegment
 import org.openrndr.shape.Rectangle
 import org.openrndr.shape.Triangle
 import saveAxiDrawFileSet
@@ -27,7 +28,7 @@ fun main() = application {
         width = (PaperSize.A5.height * screenScale).toInt()
         height = (PaperSize.A5.width * screenScale).toInt()
         position = IntVector2(-width - 15, 50)
-        title = "AxiDraw Demo 1 - Simple Shapes"
+        title = "AxiDraw Demo 4 - Optimize Paths"
     }
     program {
         val plotConfig = PlotConfig(
@@ -51,12 +52,11 @@ fun main() = application {
             strokeWeight = 1.0
             rectangle(drawArea)
             fill = null
-            strokeWeight = 0.6.fromMillimetres()
-            circle(Circle(p(Vector2(0.5, 0.5)), 25.0.fromMillimetres()))
-            shape(Triangle(p(Vector2(0.2, 0.2)), p(Vector2(0.8, 0.2)), p(Vector2(0.5, 0.8))).shape)
-            lineSegment(p(Vector2(0.5, 0.5)), p(Vector2(0.2, 0.2)))
-            lineSegment(p(Vector2(0.5, 0.5)), p(Vector2(0.8, 0.2)))
-            lineSegment(p(Vector2(0.5, 0.5)), p(Vector2(0.5, 0.8)))
+            strokeWeight = 0.3.fromMillimetres()
+            val boundary = Circle(p(Vector2(0.5, 0.5)), 40.0.fromMillimetres())
+            val points = boundary.contour.equidistantPositions(100).shuffled()
+            val shuffledLines = points.zipWithNext().map { (p1, p2) -> LineSegment(p1, p2) }.shuffled()
+            lineSegments(shuffledLines)
         }
 
         extend {

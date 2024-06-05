@@ -3,13 +3,12 @@ import org.openrndr.shape.Rectangle
 import kotlin.test.*
 
 class TestPlotConfig {
-    val red = ColorRGBa(1.0, 0.0, 0.0, 1.0)
-    val blue = ColorRGBa(0.0, 0.0, 1.0, 1.0)
-    val green = ColorRGBa(0.0, 1.0, 0.0, 1.0)
-
     @Test
     fun `plot config with pen tool type does not require a well for each color`() {
-        val plotConfig = PlotConfig(toolType = DrawTool.PEN, palette = listOf(red, blue))
+        val plotConfig =
+            PlotConfig(
+                toolType = DrawTool.PEN,
+                palette = listOf(ColorRGBa.RED, ColorRGBa.GREEN))
         assertTrue(plotConfig.eachColorHasAWell())
     }
 
@@ -18,11 +17,11 @@ class TestPlotConfig {
         // color for all wells
         val plotConfig1 = PlotConfig(
             toolType = DrawTool.DIP,
-            palette = listOf(red, blue, green),
-            paintWells = listOf(
-                Pair(0, Rectangle(10.0, 10.0, 10.0, 10.0)),
-                Pair(1, Rectangle(10.0, 10.0, 10.0, 10.0)),
-                Pair(2, Rectangle(10.0, 10.0, 10.0, 10.0)),
+            palette = listOf(ColorRGBa.RED, ColorRGBa.BLUE, ColorRGBa.GREEN),
+            paintWells = mapOf(
+                ColorRGBa.RED to listOf(Rectangle(10.0, 10.0, 10.0, 10.0)),
+                ColorRGBa.GREEN to listOf(Rectangle(10.0, 10.0, 10.0, 10.0)),
+                ColorRGBa.BLUE to listOf(Rectangle(10.0, 10.0, 10.0, 10.0)),
             )
         )
         assertTrue(plotConfig1.eachColorHasAWell())
@@ -31,29 +30,13 @@ class TestPlotConfig {
         assertFailsWith<IllegalArgumentException> {
             PlotConfig(
                 toolType = DrawTool.DIP,
-                palette = listOf(red, blue, green),
-                paintWells = listOf(
-                    Pair(0, Rectangle(10.0, 10.0, 10.0, 10.0)),
-                    Pair(2, Rectangle(10.0, 10.0, 10.0, 10.0)),
+                palette = listOf(ColorRGBa.RED, ColorRGBa.BLUE, ColorRGBa.GREEN),
+                paintWells = mapOf(
+                    ColorRGBa.RED to listOf(Rectangle(10.0, 10.0, 10.0, 10.0)),
+                    ColorRGBa.GREEN to listOf(Rectangle(10.0, 10.0, 10.0, 10.0)),
                 )
             )
         }
-    }
-
-    @Test
-    fun `getPaletteIndex should return the index of the color in the palette or -1 if not found`() {
-        val plotConfig = PlotConfig(palette = listOf(blue, green, red))
-
-        assertEquals(0, plotConfig.getPaletteIndex(blue))
-        assertEquals(2, plotConfig.getPaletteIndex(red))
-        assertEquals(-1, plotConfig.getPaletteIndex(ColorRGBa.YELLOW))
-    }
-
-    @Test
-    fun `getPaletteIndex should return the index of the color even if alpha value does not match`() {
-        val plotConfig = PlotConfig(palette = listOf(blue, green, red))
-
-        assertEquals(2, plotConfig.getPaletteIndex(ColorRGBa(1.0, 0.0, 0.0, 0.5)))
     }
 
     @Test
