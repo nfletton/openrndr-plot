@@ -10,7 +10,7 @@ file.
 
 Particular use cases where plotting via the API may be beneficial include:
 
-- Using multiple pens
+- Using multiple pens of different colors
 - Refilling pens after set distance travelled
 - Pausing mid-plot and continuing from the pause point
 - Using a paintbrush requiring brush dipping and washing
@@ -32,14 +32,10 @@ OPENRNDR Plot generates three outputs:
 ## Usage
 See `demos` directory
 
-## Issues
-- Misuse of SVG groups for layer concept maybe an issue for the SVG file output.
-
 ## Feature Wishlist
 - maintain a list of warnings and display them at the top of the output file as comments
-- add stages for stopping and restarting plots (these can double as pause points)
-- instead of explicit stages, maybe distance traveled
+- add stages for halting and restarting plots
 - pause after distance travelled e.g. for a manual ink pen refill
-- provide config for different AxiDraw pen options for painting, refilling and stirring
-- hatch fill - indicated by fill attribute
+- provide config for different AxiDraw pen height and speed options for drawing, refilling and stirring
+- hatch fill
 - handle small circles as dots

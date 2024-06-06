@@ -60,7 +60,7 @@ fun main() = application {
         )
 
         val plotConfig = PlotConfig(
-            toolType = DrawTool.DIP_AND_STIR,
+            toolType = DrawTool.DipAndStir,
             displayScale = screenScale,
             paperSize = PaperSize.A5,
             palette = colorPalette,

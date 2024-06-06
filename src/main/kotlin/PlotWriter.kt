@@ -12,42 +12,45 @@ import kotlin.math.absoluteValue
 import kotlin.math.ceil
 import kotlin.math.min
 
-const val DEFAULT_OPTIONS =
+private const val DEFAULT_OPTIONS =
     "# SE/A3\n" + "options model 2\n" + "# brushless servo\n" + "#options penlift 3\n" +
             "# millimeter unit\n" + "options units 2\n" + "# max. safe pen up 67\n" +
             "options pen_pos_up 45\n" + "options pen_pos_down 30\n" + "options speed_pendown 25\n"
 
-const val DEFAULT_LAYER_NAME = "base"
+private const val DEFAULT_LAYER_NAME = "base"
 
-enum class DrawTool {
-    PEN,           // a pen that may need swapping out or refilling
-    DIP,           // tool requiring regular dipping in a well
-    DIP_AND_STIR,  // tool requiring regular dipping in a well with medium that need stirring
+private const val CONVERSION_FACTOR = 96 / 25.4
+
+
+enum class DrawTool(val description: String) {
+    Pen("A pen that may optionally need swapping out or refilling"),
+    Dip("A tool requiring regular dipping in one or more wells"),
+    DipAndStir("A tool requiring regular dipping in a well with medium that need stirring"),
 }
 
 /**
  * PlotConfig represents the configuration settings for controlling the AxiDraw plotter.
  *
  * @property toolType   The type of drawing tool
- * @property displayScale   The scaling factor of the on-screen display of the sketch
+ * @property displayScale   The scaling factor from paper size to on-screen sketch dimensions
  * @property pathTolerance   The tolerance for what are considered connected paths
  * @property stepResolution The resolution of a step in plotter movement in millimetres
  * @property refillDistance   The stroke length before the drawing medium needs reloading in mm.
  * @property refillTolerance
- * @property preOptions    AxiDraw options to run before plot begins
- * @property randomizeStart    Randomize the start of closed paths
+ * @property preOptions    AxiDraw options to run before the plot begins
+ * @property randomizeStart    Randomize the start point of closed paths
  * @property paperSize    The dimensions of the plotting area
  * @property palette   Color palette. All colors must have alpha of 1.0.
  * @property paperOffset   Paper position relative to the AxiDraw home position
  * @property paintWells    A map of [ColorRGBa] to a list of [Rectangle]s
  * @property washWells    List of [Rectangle]s defining the wash wells
- * @property wellPadding    The padding between the well sides and the stirring path in mm
+ * @property wellPadding    The padding between the sides of the wells and the stirring path in mm
  * @property paintStirStrokes    The number of strokes in a paint well when stirring the drawing medium
  * @property washStirStrokes    The number of strokes in a wash well when washing the drawing tool
  * @property axiDrawTravel    The xy travel limits for specific AxiDraw models
  */
 data class PlotConfig(
-    val toolType: DrawTool = DrawTool.PEN,
+    val toolType: DrawTool = DrawTool.Pen,
     val displayScale: Double = 1.0,
     val pathTolerance: Double = 0.5,
     val stepResolution: Double = 0.5,
@@ -56,7 +59,7 @@ data class PlotConfig(
     val preOptions: String = DEFAULT_OPTIONS,
     val randomizeStart: Boolean = true,
     val paperSize: PaperSize = PaperSize.ART_9x12,
-    val palette: Map<ColorRGBa, String> = emptyMap(),
+    val palette: Map<ColorRGBa, String> = mapOf(ColorRGBa.BLACK to "black"),
     val paperOffset: Vector2 = Vector2.ZERO,
     val paintWells: Map<ColorRGBa, List<Rectangle>> = emptyMap(),
     val washWells: List<Rectangle> = emptyList(),
@@ -70,7 +73,7 @@ data class PlotConfig(
     }
 
     fun eachColorHasAWell() =
-        if (toolType == DrawTool.DIP || toolType == DrawTool.DIP_AND_STIR) {
+        if (toolType == DrawTool.Dip || toolType == DrawTool.DipAndStir) {
             palette.all { (color, _) -> paintWells.containsKey(color) }
         } else true
 
@@ -78,13 +81,10 @@ data class PlotConfig(
         get() = refillDistance < Double.POSITIVE_INFINITY
 
     val requiresWash: Boolean
-        get() = washWells.isNotEmpty() && (toolType == DrawTool.DIP_AND_STIR || toolType == DrawTool.DIP)
+        get() = washWells.isNotEmpty() && (toolType == DrawTool.DipAndStir || toolType == DrawTool.Dip)
 
     val requiresStir: Boolean
-        get() = toolType == DrawTool.DIP_AND_STIR
-
-    val multiColor: Boolean
-        get() = palette.isNotEmpty()
+        get() = toolType == DrawTool.DipAndStir
 }
 
 internal typealias SegmentColorGroups = MutableMap<ColorRGBa, MutableList<Segment2D>>
@@ -99,17 +99,11 @@ data class WellCommand(val location: Vector2, val commandName: String, val comma
  * Extract the segments that comprise the shape.
  */
 internal fun Shape.extractSegments(displayScale: Double, paperPosition: Vector2): List<Segment2D> {
-    val segments = mutableListOf<Segment2D>()
-
-    val scaledContours = shape.transform(transform {
+    val scaledContours = this.transform(transform {
         translate(paperPosition)
         scale(1 / displayScale)
     })
-
-    scaledContours.contours.forEach { contour ->
-        segments += contour.segments
-    }
-    return segments
+    return scaledContours.contours.flatMap { it.segments }
 }
 
 /**
@@ -117,12 +111,8 @@ internal fun Shape.extractSegments(displayScale: Double, paperPosition: Vector2)
  * Each path is a contiguous set of points that is plotted
  * as a single line or in the case of a single point, is plotted
  * as a pen down followed by a pen up.
- *
- * @property points The list of points that make up the path.
  */
-internal class Path(
-    var points: List<Vector2>,
-) {
+internal class Path(var points: List<Vector2>) {
     fun distanceToOtherStart(other: Path): Double = points.last().distanceTo(other.points.first())
 
     fun distanceToOtherEnd(other: Path): Double = points.last().distanceTo(other.points.last())
@@ -137,25 +127,24 @@ internal class Path(
     fun closed(): Boolean = points.size > 2 && points.first() == points.last()
 
     /**
-     * Shifts the start point of the path by a random offset or a specified offset.
+     * Rotate the points of the path by an offset.
      */
-    fun shiftStart(offset: Int = Random.int(0, (points.size - 1))) {
-        val modOffset = offset.absoluteValue % (points.size - 1)
+    fun rotatePoints(offset: Int = Random.int(0, points.lastIndex)) {
+        val modOffset = offset.absoluteValue % points.lastIndex
         if (closed() && modOffset != 0) {
-            val openPathSize = points.size - 1
-            val shiftedPoints = List(openPathSize) { i ->
-                points[(i + modOffset) % openPathSize]
+            val shiftedPoints = List(points.lastIndex) { i ->
+                points[(i + modOffset) % points.lastIndex]
             }
             points = shiftedPoints + shiftedPoints.first()
         }
     }
 }
 
-internal class RefillData(val config: PlotConfig) {
+internal class RefillData(private val config: PlotConfig) {
     val stirPaths: Map<ColorRGBa, List<List<Vector2>>>
     val washPaths: List<List<Vector2>>
-    val refillCommands: Map<ColorRGBa, List<WellCommand>>
-    val washCommands: List<WellCommand>
+    private val refillCommands: Map<ColorRGBa, List<WellCommand>>
+    private val washCommands: List<WellCommand>
 
     init {
         stirPaths = if (config.requiresStir)
@@ -163,24 +152,19 @@ internal class RefillData(val config: PlotConfig) {
                 color to generateStirPaths(wells, config.paintStirStrokes, config.wellPadding)
             }
         else emptyMap()
-
         washPaths = if (config.requiresWash)
             generateStirPaths(
-                config.washWells, config.washStirStrokes, config.wellPadding
+                config.washWells,
+                config.washStirStrokes,
+                config.wellPadding
             )
         else emptyList()
-
         refillCommands = generateRefillCommands(config.paintWells)
         washCommands = generateWashCommands(config.washWells)
     }
 
     /**
      * Generates wash well stir paths.
-     *
-     * @param wells The list of rectangles representing the wells.
-     * @param strokes The number of strokes to be performed within each well.
-     * @param padding The padding to be applied around the inside of each well.
-     * @return The list of stir paths for each well.
      */
     private fun generateStirPaths(
         wells: List<Rectangle>, strokes: Int, padding: Double
@@ -188,11 +172,6 @@ internal class RefillData(val config: PlotConfig) {
 
     /**
      * Generates the points of a stir path within a well.
-     *
-     * @param well The shape of the well.
-     * @param strokes The number of strokes to be performed within the well.
-     * @param padding The padding to be applied around the inside of the well.
-     * @return The list of points making up the stir path.
      */
     private fun generateStirPathPoints(
         well: Rectangle, strokes: Int, padding: Double
@@ -207,46 +186,31 @@ internal class RefillData(val config: PlotConfig) {
 
     /**
      * Generates refill commands for each color and well.
-     *
-     * @param wells The list of pairs containing the color and rectangle of each well.
-     * @param colors The list of colors.
-     * @return The list of refill commands, each consisting of a Vector2 position,
-     * command name, and AxiDraw command definition.
      */
     private fun generateRefillCommands(
         wells: Map<ColorRGBa, List<Rectangle>>
     ): Map<ColorRGBa, List<WellCommand>> =
         wells.asIterable().associate { (color, wells) ->
             color to List(wells.size) { wellIndex ->
-                generateWellPathCommand("refill_${config.palette[color]}_w${wellIndex}", stirPaths[color]!![wellIndex])
+                generateWellPathCommand(
+                    "refill_${config.palette[color]}_w${wellIndex}",
+                    stirPaths[color]!![wellIndex]
+                )
             }
         }
 
     /**
      * Generates wash commands for the given list of wells.
-     *
-     * @param wells The list of rectangles representing the wells.
-     * @return The list of wash commands, each consisting of a Vector2 position,
-     * command name, and AxiDraw command definition.
      */
     private fun generateWashCommands(
         wells: List<Rectangle>
-    ): MutableList<WellCommand> {
-        val output: MutableList<WellCommand> = mutableListOf()
-        wells.forEachIndexed { wellIndex, _ ->
-            output.add(
-                generateWellPathCommand("wash_w${wellIndex}", washPaths[wellIndex])
-            )
+    ): List<WellCommand> =
+        List(wells.size) { wellIndex ->
+            generateWellPathCommand("wash_w${wellIndex}", washPaths[wellIndex])
         }
-        return output
-    }
 
     /**
-     * Generates an AxiDraw well path command definition.
-     *
-     * @param cmdName The name of the AxiDraw well path command.
-     * @param path The list of points on the path.
-     * @return A triple containing the starting position, the command name, and the command definition.
+     * Generates a well path command definition.
      */
     private fun generateWellPathCommand(
         cmdName: String, path: List<Vector2>
@@ -255,56 +219,30 @@ internal class RefillData(val config: PlotConfig) {
         return WellCommand(path.first(), cmdName, cmdDef)
     }
 
-    /**
-     * Returns the command string for the nearest wash well based on the location of the pen.
-     */
-    fun getNearestWashWellCmd(location: Vector2): String {
-        var closestWell = Double.POSITIVE_INFINITY
-        var cmd = "# well not found for color"
-        washCommands.forEach { (wellLocation, command, _) ->
-            val distanceToWell = location.distanceTo(wellLocation)
-            if (distanceToWell < closestWell) {
-                closestWell = distanceToWell
-                cmd = command
-            }
-        }
-        return "$cmd\n"
-    }
+    private fun getNearestWellCmd(
+        commands: List<WellCommand>,
+        location: Vector2,
+        type: String
+    ): String =
+        commands.minByOrNull { location.distanceTo(it.location) }?.command
+            ?: "# well not found for $type\n"
+
+    fun getNearestWashWellCmd(location: Vector2): String =
+        getNearestWellCmd(washCommands, location, "wash")
+
+    fun getNearestPaintWellCmd(color: ColorRGBa, location: Vector2): String =
+        getNearestWellCmd(
+            refillCommands[color] ?: emptyList(), location, config.palette[color].toString()
+        )
 
     /**
-     * Returns the command name for the paint well based on the location of the pen.
+     * Builds a string containing all the command definitions for the output file.
      */
-    fun getNearestPaintWellCmd(color: ColorRGBa, location: Vector2): String {
-        var closestWell = Double.POSITIVE_INFINITY
-        var cmd = "# well not found for color"
-        refillCommands[color]?.forEach { (wellLocation, command, _) ->
-            val distanceToWell = location.distanceTo(wellLocation)
-            if (distanceToWell < closestWell) {
-                closestWell = distanceToWell
-                cmd = command
-            }
-        }
-        return "$cmd\n"
-    }
+    fun cmdDefinitions(): String =
+        (refillCommands.values.flatten() + washCommands).joinToString(separator = "\n") {
+            "def ${it.commandName} ${it.command}"
+        } + "\n"
 
-    /**
-     * Builds a string containing all the command definitions
-     * for the AXiDraw output file.
-     *
-     * @return The string containing the command definitions.
-     */
-    fun cmdDefinitions(): String {
-        val sb = StringBuilder()
-        refillCommands.forEach {
-            it.value.forEach { (_, cmd, definition) ->
-                sb.append("def $cmd $definition\n")
-            }
-        }
-        washCommands.forEach { (_, cmd, definition) ->
-            sb.append("def $cmd $definition\n")
-        }
-        return sb.toString()
-    }
 }
 
 
@@ -312,44 +250,33 @@ internal class RefillData(val config: PlotConfig) {
  * Saves the AxiDraw file set for the given composition and plot configuration.
  * The files include: the intermediate command file to drive the AxiDraw, an SVG of the
  * plot surface layout and the SVG file of the plot itself
- *
- * @param baseFilename The base name of the file set to be saved.
- * @param config The plot configuration settings for controlling the AxiDraw plotter.
  */
 fun Composition.saveAxiDrawFileSet(baseFilename: String, config: PlotConfig) {
-    val groupedSegments =
-        groupSegmentsByLayerAndColor(
-            this,
-            config.displayScale,
-            config.paperOffset
-        )
-    orderSegments(groupedSegments)
+    val groupedSegments = groupAndOrderSegmentsForPlot(this, config)
     val paths = generatePaths(groupedSegments, config)
-
     val refillData = RefillData(config)
+    val plotData = generatePlotData(paths, refillData, config)
 
-    val axiDrawFile = File("${baseFilename}.txt")
-    axiDrawFile.writeText(generatePlotData(paths, refillData, config))
+    writeAxiDrawFile(plotData, baseFilename)
     saveLayoutToSvgFile(baseFilename, refillData, config)
     savePlotToSvgFile(config.displayScale, baseFilename)
 }
 
+private fun writeAxiDrawFile(data: String, baseFilename: String) {
+    val axiDrawFile = File("${baseFilename}.txt")
+    axiDrawFile.writeText(data)
+}
 
 /**
  * Saves the composition to an SVG file and, assuming the onscreen display dimensions are
  * based on paper size (i) it scales the SVG document to the desired paper
  * size (ii) scales the sketch to the paper size.
- *
- * @param displayScale The scaling factor of the on-screen display of the sketch.
- * @param filename The name of the SVG file to be saved.
  */
-fun Composition.savePlotToSvgFile(
-    displayScale: Double, filename: String
-) {
+fun Composition.savePlotToSvgFile(displayScale: Double, filename: String) {
     val origTransform = root.transform
     val origWidth = style.width
     val origHeight = style.height
-    root.transform = transform { scale(96 / 25.4 / displayScale) }
+    root.transform = transform { scale(CONVERSION_FACTOR / displayScale) }
     style.width = Length.Pixels.fromMillimeters(style.width.value / displayScale)
     style.height = Length.Pixels.fromMillimeters(style.height.value / displayScale)
     saveToFile(File("$filename.svg"))
@@ -362,8 +289,6 @@ fun Composition.savePlotToSvgFile(
  * Generates a string of plot data that includes command definitions,
  * AxiDraw options, AxiDraw functions, wash commands and refill commands for each
  * layer and color group.
- *
- * @return The string containing the AxiDraw plot data.
  */
 internal fun generatePlotData(
     pathLayers: PathLayers,
@@ -376,12 +301,15 @@ internal fun generatePlotData(
 
     sb.append("penup\n")
     var location = Vector2.ZERO
+    var currentColor = ColorRGBa.BLACK
     pathLayers.forEach { (layerName, layer) ->
         sb.append("# Layer: ${layerName}\n")
         layer.forEach { (color, paths) ->
             if (paths.isNotEmpty()) {
-                if (config.toolType == DrawTool.PEN)
+                if (config.toolType == DrawTool.Pen && currentColor != color) {
                     sb.append("pause Color Change to ${config.palette[color]}\n")
+                    currentColor = color
+                }
                 if (config.requiresRefills) {
                     sb.append(
                         writeStrokesAndRefills(paths, refillData, config, color, location)
@@ -402,12 +330,6 @@ internal fun generatePlotData(
 
 /**
  * Writes the strokes and refills for the given paths, config, color, and lastLocation.
- *
- * @param paths The list of paths to process.
- * @param config The plot configuration settings.
- * @param color The color of the strokes.
- * @param lastLocation The last location of the plotter pen.
- * @return The string containing the strokes and refills.
  */
 private fun writeStrokesAndRefills(
     paths: MutableList<Path>,
@@ -416,7 +338,6 @@ private fun writeStrokesAndRefills(
     color: ColorRGBa,
     lastLocation: Vector2
 ): String {
-    // TODO: Add comment that all segments are less than or equal to PlotConfig.refillDistance
     val strokes: MutableList<List<Vector2>> = mutableListOf()
     val sb: StringBuilder = StringBuilder()
 
@@ -455,32 +376,39 @@ private fun writeStrokesAndRefills(
     return sb.toString()
 }
 
+private fun groupAndOrderSegmentsForPlot(
+    composition: Composition,
+    config: PlotConfig
+): SegmentLayers {
+    val groupedSegments =
+        groupSegmentsByLayerAndColor(composition, config.displayScale, config.paperOffset)
+    orderSegments(groupedSegments)
+    return groupedSegments
+}
+
 /**
  * Groups segments of ShapeNodes by layer and color.
- *
- * @return A Map representing the plot layers, where each layer contains a map of
- *         colors and their corresponding segments.
  */
 internal fun groupSegmentsByLayerAndColor(
     composition: Composition,
     displayScale: Double,
     paperOffset: Vector2
 ): SegmentLayers {
-    val segmentLayers: SegmentLayers = mutableMapOf(DEFAULT_LAYER_NAME to mutableMapOf())
     var currentLayer = DEFAULT_LAYER_NAME
+    val segmentLayers: SegmentLayers = mutableMapOf(currentLayer to mutableMapOf())
+
+    fun ensureLayerAndColorArePresent(layerName: String, color: ColorRGBa) {
+        val layer = segmentLayers.getOrPut(layerName) { mutableMapOf() }
+        layer.getOrPut(color) { mutableListOf() }
+    }
+
     composition.root.visitAll {
         if (this is ShapeNode) {
             val currentColor = this.stroke ?: ColorRGBa.BLACK
             if (this.attributes.containsKey("layer")) {
                 currentLayer = this.attributes["layer"] ?: currentLayer
             }
-            if (!segmentLayers.containsKey(currentLayer)) {
-                segmentLayers[currentLayer] = mutableMapOf(currentColor to mutableListOf())
-            } else {
-                if (!segmentLayers[currentLayer]!!.containsKey(currentColor)) {
-                    segmentLayers[currentLayer]!![currentColor] = mutableListOf()
-                }
-            }
+            ensureLayerAndColorArePresent(currentLayer, currentColor)
             segmentLayers[currentLayer]?.get(currentColor)!! +=
                 this.shape.extractSegments(displayScale, paperOffset)
         }
@@ -490,8 +418,6 @@ internal fun groupSegmentsByLayerAndColor(
 
 /**
  * Orders the segments within each layer / color group to minimize plotter travel.
- * Probably of little value when using a drawing tool requiring regular dipping.
- *
  */
 internal fun orderSegments(segmentLayers: SegmentLayers) {
     segmentLayers.forEach { (_, layer) ->
@@ -501,29 +427,17 @@ internal fun orderSegments(segmentLayers: SegmentLayers) {
                 while (segments.isNotEmpty()) {
                     val lastPoint: Vector2 =
                         if (ordered.isEmpty()) Vector2.ZERO else ordered.last().end
-                    val closestStart = segments.reduce { closest, other ->
-                        other.takeIf {
-                            it.start.squaredDistanceTo(lastPoint) < closest.start.squaredDistanceTo(
-                                lastPoint
-                            )
-                        } ?: closest
-                    }
-                    val closestEnd = segments.reduce { closest, other ->
-                        other.takeIf {
-                            it.end.squaredDistanceTo(lastPoint) < closest.end.squaredDistanceTo(
-                                lastPoint
-                            )
-                        } ?: closest
-                    }
-                    if (lastPoint.squaredDistanceTo(closestStart.start) < lastPoint.squaredDistanceTo(
-                            closestEnd.end
+                    val closestSegment = findClosestSegment(lastPoint, segments)
+                    val isStartCloser =
+                        lastPoint.squaredDistanceTo(closestSegment.start) < lastPoint.squaredDistanceTo(
+                            closestSegment.end
                         )
-                    ) {
-                        segments.remove(closestStart)
-                        ordered.add(closestStart)
+                    if (isStartCloser) {
+                        segments.remove(closestSegment)
+                        ordered.add(closestSegment)
                     } else {
-                        segments.remove(closestEnd)
-                        ordered.add(closestEnd.reverse)
+                        segments.remove(closestSegment)
+                        ordered.add(closestSegment.reverse)
                     }
                 }
                 layer[color] = ordered
@@ -532,38 +446,37 @@ internal fun orderSegments(segmentLayers: SegmentLayers) {
     }
 }
 
+private fun findClosestSegment(point: Vector2, segments: MutableList<Segment2D>): Segment2D {
+    val closestToStart = segments.minByOrNull { it.start.squaredDistanceTo(point) }
+    val closestToEnd = segments.minByOrNull { it.end.squaredDistanceTo(point) }
+    return if (point.squaredDistanceTo(closestToStart!!.start)
+        < point.squaredDistanceTo(closestToEnd!!.end)
+    ) closestToStart else closestToEnd
+}
+
 /**
  * Generates equidistant points along a given segment based on a step resolution.
  * If the segment length is greater than the step resolution, the segment is divided into
  * equidistant positions and the points are returned. Otherwise, only the start and end points
  * of the segment are returned.
- *
- * @param segment The segment to generate points from.
- * @param stepResolution The resolution at which points should be generated.
- * @return A list of Vector2 points along the segment.
  */
 private fun generateCurveSteps(
     segment: Segment2D, stepResolution: Double
 ): List<Vector2> {
-    val length = segment.length
-    val points: List<Vector2>
-    if (length > stepResolution) {
-        val numSteps: Int = ceil(length / stepResolution).toInt()
-        points = segment.equidistantPositions(numSteps)
-    } else {
-        points = listOf(segment.start, segment.end)
-    }
-    return points.map {
-        Vector2(it.x, it.y)
-    }
+    val numSteps: Int = ceil(segment.length / stepResolution).toInt()
+    val points = if (numSteps > 1)
+        segment.equidistantPositions(numSteps)
+    else
+        listOf(segment.start, segment.end)
+    return points.map { Vector2(it.x, it.y) }
 }
 
 /**
- * Generates point paths from the OPENRNDR `Segments`. The distance
- * between adjacent points on the created paths do not exceed
- * [refillDistance][lib.PlotConfig.refillDistance] Points from successive segments are
- * joined into a single set of points if the distance between them is less than
- * [pathTolerance][lib.PlotConfig.pathTolerance]
+ * Generates point paths from the layers of [Segment2D].
+ * The distance between adjacent points on the created paths do not exceed
+ * [PlotConfig.refillDistance].
+ * Points from successive segments are joined into a single set of points
+ * if the distance between them is less than [PlotConfig.pathTolerance]
  */
 internal fun generatePaths(segmentLayers: SegmentLayers, config: PlotConfig): PathLayers {
     val pathLayers = mutableMapOf<String, PathColorGroups>()
@@ -600,7 +513,7 @@ internal fun generatePaths(segmentLayers: SegmentLayers, config: PlotConfig): Pa
             }
             if (points.isNotEmpty()) {
                 val path = Path(points)
-                if (config.randomizeStart && path.closed()) path.shiftStart()
+                if (config.randomizeStart && path.closed()) path.rotatePoints()
                 paths += path
                 points = mutableListOf()
             }
@@ -618,17 +531,11 @@ internal fun generatePaths(segmentLayers: SegmentLayers, config: PlotConfig): Pa
 internal fun saveLayoutToSvgFile(filename: String, refillData: RefillData, config: PlotConfig) {
     val layout = drawComposition {
         strokeWeight = 0.5
-
         composition(createPaletteLayout(config.paintWells, config.washWells))
         refillData.stirPaths.forEach { (_, paths) ->
-            paths.forEach {
-                contour(ShapeContour.fromPoints(it, closed = false))
-            }
+            addPathContours(paths)
         }
-        refillData.washPaths.forEach {
-            contour(ShapeContour.fromPoints(it, closed = false))
-        }
-
+        addPathContours(refillData.washPaths)
         rectangle(
             config.paperOffset.x,
             config.paperOffset.y,
@@ -636,19 +543,21 @@ internal fun saveLayoutToSvgFile(filename: String, refillData: RefillData, confi
             config.paperSize.width
         )
     }
-    layout.root.transform = transform { scale(96 / 25.4) }
+    layout.root.transform = transform { scale(CONVERSION_FACTOR) }
     layout.style.width = Length.Pixels.fromMillimeters(config.axiDrawTravel.x)
     layout.style.height = Length.Pixels.fromMillimeters(config.axiDrawTravel.y)
     layout.saveToFile(File("${filename}_Layout.svg"))
 }
 
+internal fun CompositionDrawer.addPathContours(paths: List<List<Vector2>>) {
+        paths.forEach {
+            contour(ShapeContour.fromPoints(it, closed = false))
+        }
+    }
+
 /**
  * Creates a composition representing the layout of palette wells defined
  * by [PlotConfig.paintWells] and [PlotConfig.washWells].
- *
- * @property paintWells   Map of paint wells
- * @property washWells    List of wash wells
- * @return The composition representing the palette layout.
  */
 private fun createPaletteLayout(
     paintWells: Map<ColorRGBa, List<Rectangle>>,
@@ -673,10 +582,6 @@ private fun createPaletteLayout(
 /**
  * Rounds the coordinates of each Vector2 in the given list to the specified number of decimals
  * and converts the result to a string representation with no embedded whitespace.
- *
- * @param points The list of Vector2 points to round and stringify.
- * @param decimals The number of decimal places to round the coordinates to.
- * @return The string representation of the rounded Vector2 points.
  */
 internal fun roundAndStringify(points: List<Vector2>, decimals: Int = 3): String =
     points.map {

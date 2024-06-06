@@ -68,20 +68,20 @@ internal class TestPath {
     }
 
     @Test
-    fun `shiftStart should rotate start point`() {
+    fun `rotatePoints should rotate start point`() {
         val pathLength = 10
         val testPoints =
             List(pathLength - 1) { Vector2(it.toDouble(), it.toDouble()) } + Vector2.ZERO
         var testPath = Path(testPoints)
         var shiftOffset = 5
-        testPath.shiftStart(shiftOffset)
+        testPath.rotatePoints(shiftOffset)
         assertEquals(pathLength, testPath.points.size, "New path should be same size")
         assertTrue(testPath.closed(), "New path should be closed")
         assertEquals(testPoints[shiftOffset], testPath.points[0])
         assertEquals(testPoints[shiftOffset - 1], testPath.points.get(pathLength - 2))
         shiftOffset = 12
         testPath = Path(testPoints)
-        testPath.shiftStart(shiftOffset)
+        testPath.rotatePoints(shiftOffset)
         assertEquals(pathLength, testPath.points.size, "New path should be same size")
         assertTrue(testPath.closed(), "New path should be closed")
         assertEquals(testPoints[3], testPath.points[0])
