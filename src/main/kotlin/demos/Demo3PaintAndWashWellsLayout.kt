@@ -55,8 +55,6 @@ fun main() = application {
 
         val washWells: List<Rectangle> = listOf(
             Rectangle(0.0, 0.0, 50.0, 40.0),
-            Rectangle(0.0, 240.0, 50.0, 40.0),
-            Rectangle(370.0, 0.0, 50.0, 40.0),
         )
 
         val plotConfig = PlotConfig(

@@ -15,7 +15,7 @@ import kotlin.math.min
 private const val DEFAULT_OPTIONS =
     "# SE/A3\n" + "options model 2\n" + "# brushless servo\n" + "#options penlift 3\n" +
             "# millimeter unit\n" + "options units 2\n" + "# max. safe pen up 67\n" +
-            "options pen_pos_up 45\n" + "options pen_pos_down 30\n" + "options speed_pendown 25\n"
+            "options pen_pos_up 55\n" + "options pen_pos_down 30\n" + "options speed_pendown 25\n" + "options speed_penup 50\n"
 
 private const val DEFAULT_LAYER_NAME = "base"
 
@@ -224,8 +224,8 @@ internal class RefillData(private val config: PlotConfig) {
         location: Vector2,
         type: String
     ): String =
-        commands.minByOrNull { location.distanceTo(it.location) }?.command
-            ?: "# well not found for $type\n"
+        (commands.minByOrNull { location.distanceTo(it.location) }?.commandName
+            ?: "# well not found for $type").plus("\n")
 
     fun getNearestWashWellCmd(location: Vector2): String =
         getNearestWellCmd(washCommands, location, "wash")
