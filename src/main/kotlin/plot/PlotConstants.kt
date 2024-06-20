@@ -1,3 +1,5 @@
+package plot
+
 sealed class PaperSize(open val width: Double, open val height: Double) {
     // ISO
     data object A0 : PaperSize(841.0, 1189.0)

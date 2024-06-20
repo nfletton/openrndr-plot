@@ -1,7 +1,7 @@
 package demos
 
-import PaperSize
-import PlotConfig
+import plot.PaperSize
+import plot.PlotConfig
 import org.openrndr.KEY_SPACEBAR
 import org.openrndr.application
 import org.openrndr.color.ColorRGBa
@@ -13,7 +13,7 @@ import org.openrndr.namedTimestamp
 import org.openrndr.shape.Circle
 import org.openrndr.shape.Rectangle
 import org.openrndr.shape.Triangle
-import saveAxiDrawFileSet
+import plot.saveAxiDrawFileSet
 
 private val screenScale: Double
     get() = 3.0

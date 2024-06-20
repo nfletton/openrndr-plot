@@ -1,7 +1,5 @@
 package demos
 
-import PaperSize
-import PlotConfig
 import org.openrndr.KEY_SPACEBAR
 import org.openrndr.application
 import org.openrndr.color.ColorRGBa
@@ -17,7 +15,10 @@ import org.openrndr.namedTimestamp
 import org.openrndr.shape.Circle
 import org.openrndr.shape.Rectangle
 import org.openrndr.shape.Triangle
-import saveAxiDrawFileSet
+import plot.DrawTool
+import plot.PaperSize
+import plot.PlotConfig
+import plot.saveAxiDrawFileSet
 
 private val screenScale: Double
     get() = 3.0
@@ -28,8 +29,8 @@ private fun Double.fromMillimetres(): Double {
 
 fun main() = application {
     configure {
-        width = (PaperSize.A5.height * screenScale).toInt()
-        height = (PaperSize.A5.width * screenScale).toInt()
+        width = (PaperSize.ART_11x14.height * screenScale).toInt()
+        height = (PaperSize.ART_11x14.width * screenScale).toInt()
         position = IntVector2(-width - 15, 50)
         title = "AxiDraw Demo 3 - Pain and Wash Wells"
     }
@@ -60,12 +61,12 @@ fun main() = application {
         val plotConfig = PlotConfig(
             toolType = DrawTool.DipAndStir,
             displayScale = screenScale,
-            paperSize = PaperSize.A5,
+            paperSize = PaperSize.ART_11x14,
             palette = colorPalette,
             refillDistance = 200.0,
             paintWells = paintWells,
             washWells = washWells,
-            paperOffset = Vector2(57.0, 0.0)
+            paperOffset = Vector2(50.0, 0.0)
         )
 
         val border = Vector2(20.0.fromMillimetres(), 20.0.fromMillimetres())
