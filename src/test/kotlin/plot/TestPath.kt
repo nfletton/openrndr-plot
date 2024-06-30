@@ -1,3 +1,5 @@
+package plot
+
 import org.openrndr.math.Vector2
 import kotlin.test.Test
 import kotlin.test.assertEquals

@@ -1,3 +1,5 @@
+package plot
+
 import org.openrndr.color.ColorRGBa
 import org.openrndr.shape.Rectangle
 import kotlin.test.*
