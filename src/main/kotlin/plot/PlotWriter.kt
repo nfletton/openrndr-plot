@@ -7,7 +7,10 @@ import org.openrndr.extra.svg.saveToFile
 import org.openrndr.math.Vector2
 import org.openrndr.math.transforms.transform
 import org.openrndr.panel.elements.round
-import org.openrndr.shape.*
+import org.openrndr.shape.Rectangle
+import org.openrndr.shape.Segment2D
+import org.openrndr.shape.Shape
+import org.openrndr.shape.ShapeContour
 import java.io.File
 import kotlin.math.abs
 import kotlin.math.absoluteValue
@@ -98,9 +101,13 @@ internal typealias PathLayers = MutableMap<String, PathColorGroups>
 data class WellCommand(val location: Vector2, val commandName: String, val command: String)
 
 /**
- * Extract the segments that comprise the shape.
+ * Extract segments from shape while scaling and offsetting them according to on-screen scaling
+ * and paper position on plot surface.
  */
-internal fun Shape.extractSegments(displayScale: Double, paperPosition: Vector2): List<Segment2D> {
+internal fun Shape.extractScaledSegments(
+    displayScale: Double,
+    paperPosition: Vector2
+): List<Segment2D> {
     val scaledContours = this.transform(transform {
         translate(paperPosition)
         scale(1 / displayScale)
@@ -412,7 +419,7 @@ internal fun groupSegmentsByLayerAndColor(
             }
             ensureLayerAndColorArePresent(currentLayer, currentColor)
             segmentLayers[currentLayer]?.get(currentColor)!! +=
-                this.shape.extractSegments(displayScale, paperOffset)
+                this.shape.extractScaledSegments(displayScale, paperOffset)
         }
     }
     return segmentLayers
@@ -552,10 +559,10 @@ internal fun saveLayoutToSvgFile(filename: String, refillData: RefillData, confi
 }
 
 internal fun CompositionDrawer.addPathContours(paths: List<List<Vector2>>) {
-        paths.forEach {
-            contour(ShapeContour.fromPoints(it, closed = false))
-        }
+    paths.forEach {
+        contour(ShapeContour.fromPoints(it, closed = false))
     }
+}
 
 /**
  * Creates a composition representing the layout of palette wells defined
