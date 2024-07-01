@@ -1,5 +1,6 @@
 package plot
 
+import io.github.oshai.kotlinlogging.KotlinLogging
 import org.openrndr.color.ColorRGBa
 import org.openrndr.extra.composition.*
 import org.openrndr.extra.noise.Random
@@ -17,10 +18,13 @@ import kotlin.math.absoluteValue
 import kotlin.math.ceil
 import kotlin.math.min
 
+
+val logger = KotlinLogging.logger { }
+
 private const val DEFAULT_OPTIONS =
     "# SE/A3\n" + "options model 2\n" + "# brushless servo\n" + "#options penlift 3\n" +
             "# millimeter unit\n" + "options units 2\n" + "# max. safe pen up 67\n" +
-            "options pen_pos_up 55\n" + "options pen_pos_down 30\n" + "options speed_pendown 25\n" + "options speed_penup 50\n"
+            "options pen_pos_up 48\n" + "options pen_pos_down 38\n" + "options speed_pendown 25\n" + "options speed_penup 50\n"
 
 private const val DEFAULT_LAYER_NAME = "base"
 
@@ -44,6 +48,7 @@ enum class DrawTool(val description: String) {
  * @property refillTolerance
  * @property preOptions    AxiDraw options to run before the plot begins
  * @property randomizeStart    Randomize the start point of closed paths
+ * @property deDuplicate    Remove duplicate segments from plot.
  * @property paperSize    The dimensions of the plotting area
  * @property palette   Color palette. All colors must have alpha of 1.0.
  * @property paperOffset   Paper position relative to the AxiDraw home position
@@ -63,6 +68,7 @@ data class PlotConfig(
     val refillTolerance: Double = 5.0,
     val preOptions: String = DEFAULT_OPTIONS,
     val randomizeStart: Boolean = true,
+    val deDuplicate: Boolean = true,
     val paperSize: PaperSize = PaperSize.ART_9x12,
     val palette: Map<ColorRGBa, String> = mapOf(ColorRGBa.BLACK to "black"),
     val paperOffset: Vector2 = Vector2.ZERO,
@@ -261,7 +267,11 @@ internal class RefillData(private val config: PlotConfig) {
  * plot surface layout and the SVG file of the plot itself
  */
 fun Composition.saveAxiDrawFileSet(baseFilename: String, config: PlotConfig) {
-    val groupedSegments = groupAndOrderSegmentsForPlot(this, config)
+    val groupedSegments =
+        groupSegmentsByLayerAndColor(this, config.displayScale, config.paperOffset)
+    if (config.deDuplicate) removeDuplicateSegments(groupedSegments, 2.0)
+    orderSegments(groupedSegments)
+
     val paths = generatePaths(groupedSegments, config)
     val refillData = RefillData(config)
     val plotData = generatePlotData(paths, refillData, config)
@@ -269,6 +279,32 @@ fun Composition.saveAxiDrawFileSet(baseFilename: String, config: PlotConfig) {
     writeAxiDrawFile(plotData, baseFilename)
     saveLayoutToSvgFile(baseFilename, refillData, config)
     savePlotToSvgFile(config.displayScale, baseFilename)
+}
+
+internal fun removeDuplicateSegments(groupedSegments: SegmentLayers, error: Double) {
+    groupedSegments.forEach { (layerName, layer) ->
+        layer.forEach { (color, segments) ->
+            groupedSegments[layerName]?.set(color, deDuplicate(segments, error))
+        }
+    }
+}
+
+internal fun deDuplicate(segments: List<Segment2D>, error: Double): MutableList<Segment2D> {
+    val sortedSegments = segments.sortedWith((compareByDescending { it.length }))
+    val deDuped = mutableListOf<Segment2D>()
+    sortedSegments.forEach { segment ->
+        if (deDuped.none { other -> other.contains(segment, error) }) {
+            deDuped.add(segment)
+        } else {
+            logger.info { "Duplicate segment $segment, error: $error" }
+        }
+    }
+    return deDuped
+}
+
+internal fun Segment2D.contains(other: Segment2D, error: Double = 0.5): Boolean {
+    val positions = listOf(other.start, other.end, other.position(1.0 / 3), other.position(2.0 / 3))
+    return this !== other && positions.all { this.on(it, error) != null }
 }
 
 private fun writeAxiDrawFile(data: String, baseFilename: String) {
@@ -383,16 +419,6 @@ private fun writeStrokesAndRefills(
         currentLocation = stroke.last()
     }
     return sb.toString()
-}
-
-private fun groupAndOrderSegmentsForPlot(
-    composition: Composition,
-    config: PlotConfig
-): SegmentLayers {
-    val groupedSegments =
-        groupSegmentsByLayerAndColor(composition, config.displayScale, config.paperOffset)
-    orderSegments(groupedSegments)
-    return groupedSegments
 }
 
 /**
