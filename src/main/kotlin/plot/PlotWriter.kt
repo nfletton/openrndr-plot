@@ -269,7 +269,7 @@ internal class RefillData(private val config: PlotConfig) {
 fun Composition.saveAxiDrawFileSet(baseFilename: String, config: PlotConfig) {
     val groupedSegments =
         groupSegmentsByLayerAndColor(this, config.displayScale, config.paperOffset)
-    if (config.deDuplicate) removeDuplicateSegments(groupedSegments, 2.0)
+    if (config.deDuplicate) removeDuplicateSegments(groupedSegments, 5.0)
     orderSegments(groupedSegments)
 
     val paths = generatePaths(groupedSegments, config)
