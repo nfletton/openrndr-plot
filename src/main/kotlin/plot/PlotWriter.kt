@@ -412,9 +412,7 @@ private fun writeStrokesAndRefills(
     var currentLocation = lastLocation
     if (config.requiresWash) sb.append(refillData.getNearestWashWellCmd(currentLocation))
     strokes.forEach { stroke ->
-        if (config.requiresRefills) {
-            sb.append(refillData.getNearestPaintWellCmd(color, currentLocation))
-        }
+        sb.append(refillData.getNearestPaintWellCmd(color, currentLocation))
         sb.append("draw_path ${roundAndStringify(stroke)}\n")
         currentLocation = stroke.last()
     }
