@@ -497,11 +497,10 @@ private fun generateCurveSteps(
     segment: Segment2D, stepResolution: Double
 ): List<Vector2> {
     val numSteps: Int = ceil(segment.length / stepResolution).toInt()
-    val points = if (numSteps > 1)
-        segment.equidistantPositions(numSteps)
+    return if (numSteps > 1)
+        segment.equidistantPositions(numSteps).toList()
     else
         listOf(segment.start, segment.end)
-    return points.map { Vector2(it.x, it.y) }
 }
 
 /**
