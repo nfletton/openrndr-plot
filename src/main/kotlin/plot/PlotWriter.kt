@@ -269,7 +269,7 @@ internal class RefillData(private val config: PlotConfig) {
 fun Composition.saveAxiDrawFileSet(baseFilename: String, config: PlotConfig) {
     val groupedSegments =
         groupSegmentsByLayerAndColor(this, config.displayScale, config.paperOffset)
-    if (config.deDuplicate) removeDuplicateSegments(groupedSegments, 5.0)
+    if (config.deDuplicate) removeDuplicateSegments(groupedSegments, 0.95)
     orderSegments(groupedSegments)
 
     val paths = generatePaths(groupedSegments, config)
@@ -303,7 +303,12 @@ internal fun deDuplicate(segments: List<Segment2D>, error: Double): MutableList<
 }
 
 internal fun Segment2D.contains(other: Segment2D, error: Double = 0.5): Boolean {
-    val positions = listOf(other.start, other.end, other.position(1.0 / 3), other.position(2.0 / 3))
+    if (isStraight() != other.isStraight()) return false
+    val positions = if (isStraight()) {
+        listOf(other.start, other.end)
+    } else {
+        listOf(other.start, other.end, other.position(3.0 / 10), other.position(6.0 / 10))
+    }
     return this !== other && positions.all { this.on(it, error) != null }
 }
 
