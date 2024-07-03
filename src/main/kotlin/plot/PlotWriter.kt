@@ -46,9 +46,9 @@ enum class DrawTool(val description: String) {
  * @property stepResolution The resolution of a step in plotter movement in millimetres
  * @property refillDistance   The stroke length before the drawing medium needs reloading in mm.
  * @property refillTolerance
+ * @property duplicateTolerance    Tolerance for removing wholly overlapping segments.
  * @property preOptions    AxiDraw options to run before the plot begins
  * @property randomizeStart    Randomize the start point of closed paths
- * @property deDuplicate    Remove duplicate segments from plot.
  * @property paperSize    The dimensions of the plotting area
  * @property palette   Color palette. All colors must have alpha of 1.0.
  * @property paperOffset   Paper position relative to the AxiDraw home position
@@ -68,7 +68,7 @@ data class PlotConfig(
     val refillTolerance: Double = 5.0,
     val preOptions: String = DEFAULT_OPTIONS,
     val randomizeStart: Boolean = true,
-    val deDuplicate: Boolean = true,
+    val duplicateTolerance: Double = 0.5,
     val paperSize: PaperSize = PaperSize.ART_9x12,
     val palette: Map<ColorRGBa, String> = mapOf(ColorRGBa.BLACK to "black"),
     val paperOffset: Vector2 = Vector2.ZERO,
@@ -269,7 +269,8 @@ internal class RefillData(private val config: PlotConfig) {
 fun Composition.saveAxiDrawFileSet(baseFilename: String, config: PlotConfig) {
     val groupedSegments =
         groupSegmentsByLayerAndColor(this, config.displayScale, config.paperOffset)
-    if (config.deDuplicate) removeDuplicateSegments(groupedSegments, 0.95)
+    if (config.duplicateTolerance < Double.POSITIVE_INFINITY)
+        removeDuplicateSegments(groupedSegments, config.duplicateTolerance)
     orderSegments(groupedSegments)
 
     val paths = generatePaths(groupedSegments, config)
