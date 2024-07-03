@@ -68,7 +68,7 @@ data class PlotConfig(
     val refillTolerance: Double = 5.0,
     val preOptions: String = DEFAULT_OPTIONS,
     val randomizeStart: Boolean = true,
-    val duplicateTolerance: Double = 0.5,
+    val duplicateTolerance: Double = Double.POSITIVE_INFINITY,
     val paperSize: PaperSize = PaperSize.ART_9x12,
     val palette: Map<ColorRGBa, String> = mapOf(ColorRGBa.BLACK to "black"),
     val paperOffset: Vector2 = Vector2.ZERO,
