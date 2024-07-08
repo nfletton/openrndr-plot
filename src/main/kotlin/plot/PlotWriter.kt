@@ -96,6 +96,9 @@ data class PlotConfig(
 
     val requiresStir: Boolean
         get() = toolType == DrawTool.DipAndStir
+
+    val isPainting: Boolean
+        get() = toolType == DrawTool.Dip || toolType == DrawTool.DipAndStir
 }
 
 internal typealias SegmentColorGroups = MutableMap<ColorRGBa, MutableList<Segment2D>>
@@ -346,41 +349,43 @@ internal fun generatePlotData(
     refillData: RefillData,
     config: PlotConfig
 ): String {
-    val sb = StringBuilder()
-    sb.append("${refillData.cmdDefinitions()}\n")
-    sb.append("${config.preOptions}\nupdate\n")
+    return buildString {
+        append("${refillData.cmdDefinitions()}\n")
+        append("${config.preOptions}\nupdate\n")
 
-    sb.append("penup\n")
-    var location = Vector2.ZERO
-    var currentColor = ColorRGBa.BLACK
-    pathLayers.forEach { (layerName, layer) ->
-        sb.append("# Layer: ${layerName}\n")
-        layer.forEach { (color, paths) ->
-            if (paths.isNotEmpty()) {
-                if (config.toolType == DrawTool.Pen && currentColor != color) {
-                    sb.append("pause Color Change to ${config.palette[color]}\n")
-                    currentColor = color
-                }
-                if (config.requiresRefills) {
-                    sb.append(
-                        writeStrokesAndRefills(paths, refillData, config, color, location)
-                    )
-                } else {
-                    // write paths directly
-                    paths.forEach {
-                        sb.append("draw_path ${roundAndStringify(it.points)}\n")
+        append("penup\n")
+        var location = Vector2.ZERO
+        var currentColor = ColorRGBa.BLACK
+        pathLayers.forEach { (layerName, layer) ->
+            append("# Layer: ${layerName}\n")
+            layer.forEach { (color, paths) ->
+                if (paths.isNotEmpty()) {
+                    if (config.toolType == DrawTool.Pen && currentColor != color) {
+                        append("pause Color Change to ${config.palette[color]}\n")
+                        currentColor = color
                     }
+                    when {
+                        config.isPainting ->
+                            append(
+                                writeStrokesAndRefills(paths, refillData, config, color, location)
+                            )
+                        config.requiresRefills ->
+                            append(writePathsAndRefillPauses(paths, config))
+                        else ->
+                            paths.forEach {
+                                append("draw_path ${roundAndStringify(it.points)}\n")
+                            }
+                    }
+                    location = paths.last().points.last()
                 }
-                location = paths.last().points.last()
             }
         }
+        append("moveto 0 0\n")
     }
-    sb.append("moveto 0.0 0.0\n")
-    return sb.toString()
 }
 
 /**
- * Writes the strokes and refills for the given paths, config, color, and lastLocation.
+ * Writes the strokes and refills for the given paths, config, color and lastLocation.
  */
 private fun writeStrokesAndRefills(
     paths: MutableList<Path>,
@@ -423,6 +428,28 @@ private fun writeStrokesAndRefills(
         currentLocation = stroke.last()
     }
     return sb.toString()
+}
+
+/**
+ * Write paths and refill pauses for pen tool types.
+ */
+private fun writePathsAndRefillPauses(
+    paths: List<Path>,
+    config: PlotConfig
+): String {
+    var distanceSoFar = 0.0
+    return buildString {
+        paths.forEach { path ->
+            val pathLength = path.length()
+            distanceSoFar += pathLength
+            if (distanceSoFar > config.refillDistance) {
+                append("moveto 0 0\n")
+                append("pause refill pen\n")
+                distanceSoFar = pathLength
+            }
+            append("draw_path ${path.points}\n")
+        }
+    }
 }
 
 /**
