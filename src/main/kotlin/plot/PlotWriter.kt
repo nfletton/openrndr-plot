@@ -111,7 +111,7 @@ data class WellCommand(val location: Vector2, val commandName: String, val comma
 
 /**
  * Extract segments from shape while scaling and offsetting them according to on-screen scaling
- * and paper position on plot surface.
+ * and paper position on the plot surface.
  */
 internal fun Shape.extractScaledSegments(
     displayScale: Double,
@@ -440,14 +440,13 @@ private fun writePathsAndRefillPauses(
     var distanceSoFar = 0.0
     return buildString {
         paths.forEach { path ->
-            val pathLength = path.length()
-            distanceSoFar += pathLength
             if (distanceSoFar > config.refillDistance) {
                 append("moveto 0 0\n")
                 append("pause refill pen\n")
-                distanceSoFar = pathLength
+                distanceSoFar = 0.0
             }
-            append("draw_path ${path.points}\n")
+            distanceSoFar += path.length()
+            append("draw_path ${roundAndStringify(path.points)}\n")
         }
     }
 }
