@@ -2,8 +2,8 @@ package plot
 
 import io.github.oshai.kotlinlogging.KotlinLogging
 import org.openrndr.color.ColorRGBa
+import org.openrndr.color.rgb
 import org.openrndr.extra.composition.*
-import org.openrndr.extra.noise.Random
 import org.openrndr.extra.svg.saveToFile
 import org.openrndr.math.Vector2
 import org.openrndr.math.transforms.transform
@@ -14,17 +14,23 @@ import org.openrndr.shape.Shape
 import org.openrndr.shape.ShapeContour
 import java.io.File
 import kotlin.math.abs
-import kotlin.math.absoluteValue
 import kotlin.math.ceil
-import kotlin.math.min
 
 
 val logger = KotlinLogging.logger { }
 
 private const val DEFAULT_OPTIONS =
-    "# SE/A3\n" + "options model 2\n" + "# brushless servo\n" + "#options penlift 3\n" +
-            "# millimeter unit\n" + "options units 2\n" + "# max. safe pen up 67\n" +
-            "options pen_pos_up 48\n" + "options pen_pos_down 38\n" + "options speed_pendown 25\n" + "options speed_penup 50\n"
+    "# SE/A3\n" +
+    "options model 2\n" +
+    "# brushless servo\n" +
+    "#options penlift 3\n" +
+    "# millimeter unit\n" +
+    "options units 2\n" +
+    "# max. safe pen up 67\n" +
+    "options pen_pos_up 48\n" +
+    "options pen_pos_down 33\n" +
+    "options speed_pendown 10\n" +
+    "options speed_penup 35\n"
 
 private const val DEFAULT_LAYER_NAME = "base"
 
@@ -62,8 +68,8 @@ enum class DrawTool(val description: String) {
 data class PlotConfig(
     val toolType: DrawTool = DrawTool.Pen,
     val displayScale: Double = 1.0,
-    val pathTolerance: Double = 0.5,
-    val stepResolution: Double = 0.5,
+    val pathTolerance: Double = 0.25,
+    val stepResolution: Double = 0.25,
     val refillDistance: Double = Double.POSITIVE_INFINITY,
     val refillTolerance: Double = 5.0,
     val preOptions: String = DEFAULT_OPTIONS,
@@ -83,10 +89,9 @@ data class PlotConfig(
         require(eachColorHasAWell()) { "Each color in the palette must have an associated well" }
     }
 
-    fun eachColorHasAWell() =
-        if (toolType == DrawTool.Dip || toolType == DrawTool.DipAndStir) {
-            palette.all { (color, _) -> paintWells.containsKey(color) }
-        } else true
+    fun eachColorHasAWell() = if (toolType == DrawTool.Dip || toolType == DrawTool.DipAndStir) {
+        palette.all { (color, _) -> paintWells.containsKey(color) }
+    } else true
 
     val requiresRefills: Boolean
         get() = refillDistance < Double.POSITIVE_INFINITY
@@ -101,62 +106,10 @@ data class PlotConfig(
         get() = toolType == DrawTool.Dip || toolType == DrawTool.DipAndStir
 }
 
-internal typealias SegmentColorGroups = MutableMap<ColorRGBa, MutableList<Segment2D>>
-internal typealias SegmentLayers = MutableMap<String, SegmentColorGroups>
-
-internal typealias PathColorGroups = MutableMap<ColorRGBa, MutableList<Path>>
-internal typealias PathLayers = MutableMap<String, PathColorGroups>
+internal typealias ContourColorGroups = MutableMap<ColorRGBa, MutableList<ShapeContour>>
+internal typealias ContourLayers = MutableMap<String, ContourColorGroups>
 
 data class WellCommand(val location: Vector2, val commandName: String, val command: String)
-
-/**
- * Extract segments from shape while scaling and offsetting them according to on-screen scaling
- * and paper position on the plot surface.
- */
-internal fun Shape.extractScaledSegments(
-    displayScale: Double,
-    paperPosition: Vector2
-): List<Segment2D> {
-    val scaledContours = this.transform(transform {
-        translate(paperPosition)
-        scale(1 / displayScale)
-    })
-    return scaledContours.contours.flatMap { it.segments }
-}
-
-/**
- * Represents a path consisting of one or more points.
- * Each path is a contiguous set of points that is plotted
- * as a single line or in the case of a single point, is plotted
- * as a pen down followed by a pen up.
- */
-internal class Path(var points: List<Vector2>) {
-    fun distanceToOtherStart(other: Path): Double = points.last().distanceTo(other.points.first())
-
-    fun distanceToOtherEnd(other: Path): Double = points.last().distanceTo(other.points.last())
-
-    fun closestEnd(other: Path): Double =
-        min(this.distanceToOtherStart(other), this.distanceToOtherEnd(other))
-
-    fun length() = points.windowed(2).fold(0.0) { sum, segment ->
-        sum + segment.first().distanceTo(segment.last())
-    }
-
-    fun closed(): Boolean = points.size > 2 && points.first() == points.last()
-
-    /**
-     * Rotate the points of the path by an offset.
-     */
-    fun rotatePoints(offset: Int = Random.int(0, points.lastIndex)) {
-        val modOffset = offset.absoluteValue % points.lastIndex
-        if (closed() && modOffset != 0) {
-            val shiftedPoints = List(points.lastIndex) { i ->
-                points[(i + modOffset) % points.lastIndex]
-            }
-            points = shiftedPoints + shiftedPoints.first()
-        }
-    }
-}
 
 internal class RefillData(private val config: PlotConfig) {
     val stirPaths: Map<ColorRGBa, List<List<Vector2>>>
@@ -165,18 +118,17 @@ internal class RefillData(private val config: PlotConfig) {
     private val washCommands: List<WellCommand>
 
     init {
-        stirPaths = if (config.requiresStir)
-            config.paintWells.asIterable().associate { (color, wells) ->
-                color to generateStirPaths(wells, config.paintStirStrokes, config.wellPadding)
-            }
-        else emptyMap()
-        washPaths = if (config.requiresWash)
-            generateStirPaths(
-                config.washWells,
-                config.washStirStrokes,
-                config.wellPadding
+        stirPaths =
+            if (config.requiresStir)
+                config.paintWells.asIterable().associate { (color, wells) ->
+                    color to generateStirPaths(wells, config.paintStirStrokes, config.wellPadding)
+                }
+            else emptyMap()
+        washPaths =
+            if (config.requiresWash) generateStirPaths(
+                config.washWells, config.washStirStrokes, config.wellPadding
             )
-        else emptyList()
+            else emptyList()
         refillCommands = generateRefillCommands(config.paintWells)
         washCommands = generateWashCommands(config.washWells)
     }
@@ -270,51 +222,18 @@ internal class RefillData(private val config: PlotConfig) {
  * plot surface layout and the SVG file of the plot itself
  */
 fun Composition.saveAxiDrawFileSet(baseFilename: String, config: PlotConfig) {
-    val groupedSegments =
-        groupSegmentsByLayerAndColor(this, config.displayScale, config.paperOffset)
-    if (config.duplicateTolerance < Double.POSITIVE_INFINITY)
-        removeDuplicateSegments(groupedSegments, config.duplicateTolerance)
-    orderSegments(groupedSegments)
+    val groupedContours =
+        groupContoursByLayerAndColor(this, config.displayScale, config.paperOffset)
+    orderContours(groupedContours)
 
-    val paths = generatePaths(groupedSegments, config)
     val refillData = RefillData(config)
-    val plotData = generatePlotData(paths, refillData, config)
+    val plotData = generatePlotData(groupedContours, refillData, config)
 
     writeAxiDrawFile(plotData, baseFilename)
     saveLayoutToSvgFile(baseFilename, refillData, config)
     savePlotToSvgFile(config.displayScale, baseFilename)
 }
 
-internal fun removeDuplicateSegments(groupedSegments: SegmentLayers, error: Double) {
-    groupedSegments.forEach { (layerName, layer) ->
-        layer.forEach { (color, segments) ->
-            groupedSegments[layerName]?.set(color, deDuplicate(segments, error))
-        }
-    }
-}
-
-internal fun deDuplicate(segments: List<Segment2D>, error: Double): MutableList<Segment2D> {
-    val sortedSegments = segments.sortedWith((compareByDescending { it.length }))
-    val deDuped = mutableListOf<Segment2D>()
-    sortedSegments.forEach { segment ->
-        if (deDuped.none { other -> other.contains(segment, error) }) {
-            deDuped.add(segment)
-        } else {
-            logger.info { "Duplicate segment $segment, error: $error" }
-        }
-    }
-    return deDuped
-}
-
-internal fun Segment2D.contains(other: Segment2D, error: Double = 0.5): Boolean {
-    if (isStraight() != other.isStraight()) return false
-    val positions = if (isStraight()) {
-        listOf(other.start, other.end)
-    } else {
-        listOf(other.start, other.end, other.position(3.0 / 10), other.position(6.0 / 10))
-    }
-    return this !== other && positions.all { this.on(it, error) != null }
-}
 
 private fun writeAxiDrawFile(data: String, baseFilename: String) {
     val axiDrawFile = File("${baseFilename}.txt")
@@ -345,9 +264,7 @@ fun Composition.savePlotToSvgFile(displayScale: Double, filename: String) {
  * layer and color group.
  */
 internal fun generatePlotData(
-    pathLayers: PathLayers,
-    refillData: RefillData,
-    config: PlotConfig
+    contourLayers: ContourLayers, refillData: RefillData, config: PlotConfig
 ): String {
     return buildString {
         append("${refillData.cmdDefinitions()}\n")
@@ -356,27 +273,28 @@ internal fun generatePlotData(
         append("penup\n")
         var location = Vector2.ZERO
         var currentColor = ColorRGBa.BLACK
-        pathLayers.forEach { (layerName, layer) ->
+        contourLayers.forEach { (layerName, layer) ->
             append("# Layer: ${layerName}\n")
-            layer.forEach { (color, paths) ->
-                if (paths.isNotEmpty()) {
+            layer.forEach { (color, contours) ->
+                if (contours.isNotEmpty()) {
                     if (config.toolType == DrawTool.Pen && currentColor != color) {
                         append("pause Color Change to ${config.palette[color]}\n")
                         currentColor = color
                     }
+                    val paths = mergePaths(contours.map { it.toPath(config) }, config.pathTolerance)
+
                     when {
-                        config.isPainting ->
-                            append(
-                                writeStrokesAndRefills(paths, refillData, config, color, location)
-                            )
-                        config.requiresRefills ->
-                            append(writePathsAndRefillPauses(paths, config))
-                        else ->
-                            paths.forEach {
-                                append("draw_path ${roundAndStringify(it.points)}\n")
-                            }
+                        config.isPainting -> append(
+                            writeStrokesAndRefills(paths, refillData, config, color, location)
+                        )
+
+                        config.requiresRefills -> append(writePathsAndRefillPauses(paths, config))
+
+                        else -> paths.forEach {
+                            append("draw_path ${roundAndStringify(it)}\n")
+                        }
                     }
-                    location = paths.last().points.last()
+                    location = contours.last().segments.last().end
                 }
             }
         }
@@ -385,10 +303,66 @@ internal fun generatePlotData(
 }
 
 /**
+ * Merges the input paths based on a given tolerance value.
+ *
+ * @param paths The input paths to be merged. Each path is represented as a list of Vector2 points.
+ * @param tolerance The maximum distance allowed between the end point of one path and the start point of the next path
+ *                  in order for the paths to be merged.
+ * @return The merged paths as a list of lists of Vector2 points.
+ */
+private fun mergePaths(paths: List<List<Vector2>>, tolerance: Double): List<List<Vector2>> {
+    val mergedPaths = mutableListOf<MutableList<Vector2>>()
+    var lastEndPoint = Vector2.ZERO
+    paths.forEach { path ->
+        if (mergedPaths.isEmpty()) {
+            mergedPaths.add(path.toMutableList())
+        } else {
+            if (path.first().distanceTo(lastEndPoint) > tolerance) {
+                mergedPaths.add(path.toMutableList())
+            } else {
+                mergedPaths.last() += path
+            }
+        }
+        lastEndPoint = path.last()
+    }
+    return mergedPaths.toList()
+}
+
+/**
+ * Converts the ShapeContour to a path represented as a list of Vector2 points.
+ *
+ * @param config The configuration settings for controlling the AxiDraw plotter.
+ * @return The path represented as a list of Vector2 points.
+ */
+private fun ShapeContour.toPath(config: PlotConfig): List<Vector2> {
+    val path = mutableListOf<Vector2>()
+    this.segments.forEach { segment ->
+        val points = when (segment.control.size) {
+            1, 2 -> generateCurveSteps(segment, config.stepResolution)
+            else -> {
+                if (segment.length <= config.refillDistance) {
+                    listOf(segment.start, segment.end)
+                } else {
+                    val numStrokes = ceil(segment.length / config.refillDistance).toInt()
+                    segment.equidistantPositions(numStrokes + 1)
+                }
+            }
+        }
+        if (path.isEmpty()) {
+            path += points
+        } else {
+            if (path.last() == points.first()) path += points.drop(1)
+            else logger.error { "None contiguous contour segments" }
+        }
+    }
+    return path
+}
+
+/**
  * Writes the strokes and refills for the given paths, config, color and lastLocation.
  */
 private fun writeStrokesAndRefills(
-    paths: MutableList<Path>,
+    paths: List<List<Vector2>>,
     refillData: RefillData,
     config: PlotConfig,
     color: ColorRGBa,
@@ -400,11 +374,10 @@ private fun writeStrokesAndRefills(
     paths.forEach { path ->
         val strokePoints = mutableListOf<Vector2>()
         var distanceSoFar = 0.0
-        val points = path.points
-        strokePoints += points.first()
-        var lastPoint = points.first()
-        for (pointIndex in 1..points.lastIndex) {
-            val currentPoint = points[pointIndex]
+        strokePoints += path.first()
+        var lastPoint = path.first()
+        for (pointIndex in 1..path.lastIndex) {
+            val currentPoint = path[pointIndex]
             val distanceFromLast = lastPoint.distanceTo(currentPoint)
             if (distanceSoFar + distanceFromLast > config.refillDistance) {
                 strokes += strokePoints.toList()
@@ -415,7 +388,7 @@ private fun writeStrokesAndRefills(
             strokePoints += currentPoint
             lastPoint = currentPoint
             distanceSoFar += distanceFromLast
-            if (pointIndex == points.lastIndex) {
+            if (pointIndex == path.lastIndex) {
                 strokes += strokePoints
             }
         }
@@ -433,10 +406,10 @@ private fun writeStrokesAndRefills(
 /**
  * Write paths and refill pauses for pen tool types.
  */
-private fun writePathsAndRefillPauses(
-    paths: List<Path>,
-    config: PlotConfig
-): String {
+private fun writePathsAndRefillPauses(paths: List<List<Vector2>>, config: PlotConfig): String {
+
+    fun length(path: List<Vector2>) = path.zipWithNext { a, b -> a.distanceTo(b) }.sum()
+
     var distanceSoFar = 0.0
     return buildString {
         paths.forEach { path ->
@@ -445,64 +418,85 @@ private fun writePathsAndRefillPauses(
                 append("pause refill pen\n")
                 distanceSoFar = 0.0
             }
-            distanceSoFar += path.length()
-            append("draw_path ${roundAndStringify(path.points)}\n")
+            distanceSoFar += length(path)
+            append("draw_path ${roundAndStringify(path)}\n")
         }
     }
 }
 
+
+private fun getEffectiveColor(stroke: ColorRGBa?): ColorRGBa {
+    val color = stroke ?: ColorRGBa.BLACK
+    return if (color.alpha == 1.0) color else rgb(color.r, color.g, color.b)
+}
+
 /**
- * Groups segments of ShapeNodes by layer and color.
+ * Groups contours of ShapeNodes by layer and color.
  */
-internal fun groupSegmentsByLayerAndColor(
-    composition: Composition,
-    displayScale: Double,
-    paperOffset: Vector2
-): SegmentLayers {
+internal fun groupContoursByLayerAndColor(
+    composition: Composition, displayScale: Double, paperOffset: Vector2
+): ContourLayers {
     var currentLayer = DEFAULT_LAYER_NAME
-    val segmentLayers: SegmentLayers = mutableMapOf(currentLayer to mutableMapOf())
+    val contourLayers: ContourLayers = mutableMapOf(currentLayer to mutableMapOf())
 
     fun ensureLayerAndColorArePresent(layerName: String, color: ColorRGBa) {
-        val layer = segmentLayers.getOrPut(layerName) { mutableMapOf() }
+        val layer = contourLayers.getOrPut(layerName) { mutableMapOf() }
         layer.getOrPut(color) { mutableListOf() }
     }
 
     composition.root.visitAll {
         if (this is ShapeNode) {
-            val currentColor = this.stroke ?: ColorRGBa.BLACK
+            val currentColor = getEffectiveColor(this.stroke)
+
             if (this.attributes.containsKey("layer")) {
                 currentLayer = this.attributes["layer"] ?: currentLayer
             }
             ensureLayerAndColorArePresent(currentLayer, currentColor)
-            segmentLayers[currentLayer]?.get(currentColor)!! +=
-                this.shape.extractScaledSegments(displayScale, paperOffset)
+            contourLayers[currentLayer]?.get(currentColor)!! += this.shape.transformContours(
+                displayScale, paperOffset
+            )
         }
     }
-    return segmentLayers
+    return contourLayers
 }
 
 /**
- * Orders the segments within each layer / color group to minimize plotter travel.
+ * Transform shape contours to paper size and position
  */
-internal fun orderSegments(segmentLayers: SegmentLayers) {
-    segmentLayers.forEach { (_, layer) ->
-        layer.forEach { (color, segments) ->
-            if (segments.isNotEmpty()) {
-                val ordered = mutableListOf<Segment2D>()
-                while (segments.isNotEmpty()) {
+internal fun Shape.transformContours(
+    displayScale: Double, paperPosition: Vector2
+): List<ShapeContour> = this.transform(transform {
+    translate(paperPosition)
+    scale(1 / displayScale)
+}).contours
+
+
+/**
+ * Orders the contours within each layer / color group to minimize plotter travel.
+ */
+internal fun orderContours(contourLayers: ContourLayers) {
+    contourLayers.forEach { (_, layer) ->
+        layer.forEach { (color, contours) ->
+            if (contours.isNotEmpty()) {
+                val ordered = mutableListOf<ShapeContour>()
+                while (contours.isNotEmpty()) {
                     val lastPoint: Vector2 =
-                        if (ordered.isEmpty()) Vector2.ZERO else ordered.last().end
-                    val closestSegment = findClosestSegment(lastPoint, segments)
+                        if (ordered.isEmpty()) Vector2.ZERO else ordered.last().segments.last().end
+                    val closestContour = findClosestContour(lastPoint, contours)
                     val isStartCloser =
-                        lastPoint.squaredDistanceTo(closestSegment.start) < lastPoint.squaredDistanceTo(
-                            closestSegment.end
+                        lastPoint.squaredDistanceTo(closestContour.segments.first().start) <= lastPoint.squaredDistanceTo(
+                            closestContour.segments.last().end
                         )
+                    contours.remove(closestContour)
                     if (isStartCloser) {
-                        segments.remove(closestSegment)
-                        ordered.add(closestSegment)
+                        ordered.add(closestContour)
                     } else {
-                        segments.remove(closestSegment)
-                        ordered.add(closestSegment.reverse)
+                        ordered.add(
+                            ShapeContour.fromSegments(
+                                closestContour.segments.asReversed().map { it.reverse },
+                                closestContour.closed
+                            )
+                        )
                     }
                 }
                 layer[color] = ordered
@@ -511,11 +505,12 @@ internal fun orderSegments(segmentLayers: SegmentLayers) {
     }
 }
 
-private fun findClosestSegment(point: Vector2, segments: MutableList<Segment2D>): Segment2D {
-    val closestToStart = segments.minByOrNull { it.start.squaredDistanceTo(point) }
-    val closestToEnd = segments.minByOrNull { it.end.squaredDistanceTo(point) }
-    return if (point.squaredDistanceTo(closestToStart!!.start)
-        < point.squaredDistanceTo(closestToEnd!!.end)
+private fun findClosestContour(point: Vector2, contours: MutableList<ShapeContour>): ShapeContour {
+    val closestToStart = contours.minByOrNull { it.segments.first().start.squaredDistanceTo(point) }
+    val closestToEnd = contours.minByOrNull { it.segments.last().end.squaredDistanceTo(point) }
+    return if (point.squaredDistanceTo(closestToStart!!.segments.first().start) <= point.squaredDistanceTo(
+            closestToEnd!!.segments.last().end
+        )
     ) closestToStart else closestToEnd
 }
 
@@ -535,62 +530,11 @@ private fun generateCurveSteps(
         listOf(segment.start, segment.end)
 }
 
-/**
- * Generates point paths from the layers of [Segment2D].
- * The distance between adjacent points on the created paths do not exceed
- * [PlotConfig.refillDistance].
- * Points from successive segments are joined into a single set of points
- * if the distance between them is less than [PlotConfig.pathTolerance]
- */
-internal fun generatePaths(segmentLayers: SegmentLayers, config: PlotConfig): PathLayers {
-    val pathLayers = mutableMapOf<String, PathColorGroups>()
-    segmentLayers.forEach { (layerName, layer) ->
-        pathLayers[layerName] = mutableMapOf()
-        layer.forEach { (color, segments) ->
-            pathLayers[layerName]!![color] = mutableListOf()
-            var points = mutableListOf<Vector2>()
-            val paths = mutableListOf<Path>()
-            segments.forEach { segment ->
-                val segPoints: List<Vector2> = when (segment.control.size) {
-                    // TODO: handle dots - these should be pen up down operations only
-                    1, 2 -> generateCurveSteps(segment, config.stepResolution)
-                    else -> {
-                        if (segment.length <= config.refillDistance) {
-                            listOf(segment.start, segment.end)
-                        } else {
-                            val numStrokes =
-                                ceil(segment.length / config.refillDistance).toInt()
-                            segment.equidistantPositions(numStrokes + 1)
-                        }
-                    }
-                }
-                segPoints.forEachIndexed { pIndex, point ->
-                    if (pIndex == 0 && points.isNotEmpty()) {
-                        if (points.last().distanceTo(point) > config.pathTolerance) {
-                            paths += Path(points)
-                            points = mutableListOf(point)
-                        }
-                    } else {
-                        points += point
-                    }
-                }
-            }
-            if (points.isNotEmpty()) {
-                val path = Path(points)
-                if (config.randomizeStart && path.closed()) path.rotatePoints()
-                paths += path
-                points = mutableListOf()
-            }
-            pathLayers[layerName]?.set(color, paths)
-        }
-    }
-    return pathLayers
-}
 
 /**
  * Saves the layout of the plot to an SVG file.
  * The layout includes: The paint and wash wells,
- * the paint and wash stir paths; and the paper boundary
+ * the paint and wash stir paths and the paper boundary
  */
 internal fun saveLayoutToSvgFile(filename: String, refillData: RefillData, config: PlotConfig) {
     val layout = drawComposition {

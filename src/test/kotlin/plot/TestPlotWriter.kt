@@ -4,6 +4,7 @@ import org.openrndr.color.ColorRGBa
 import org.openrndr.extra.composition.drawComposition
 import org.openrndr.math.Vector2
 import org.openrndr.shape.LineSegment
+import org.openrndr.shape.ShapeContour
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -17,7 +18,7 @@ internal class TestPlotWriter {
     }
 
     @Test
-    fun `group segments by color with default layer assignment`() {
+    fun `group contours by color with default layer assignment`() {
         val composition = drawComposition {
             stroke = ColorRGBa.BLUE
             rectangle(20.0, 20.0,20.0, 20.0,)
@@ -25,19 +26,19 @@ internal class TestPlotWriter {
             circle(50.0, 50.0, 20.0,)
         }
 
-        val layers = groupSegmentsByLayerAndColor(composition, 1.0, Vector2.ZERO)
+        val layers = groupContoursByLayerAndColor(composition, 1.0, Vector2.ZERO)
 
         assertTrue(layers.size == 1)
         assertTrue( layers.containsKey("base"))
         assertTrue( layers["base"]!!.size == 2)
         assertTrue(layers["base"]!!.containsKey(ColorRGBa.BLUE))
-        assertTrue(layers["base"]?.get(ColorRGBa.BLUE)!!.size == 4)
+        assertTrue(layers["base"]?.get(ColorRGBa.BLUE)!!.size == 1)
         assertTrue(layers["base"]!!.containsKey(ColorRGBa.YELLOW))
-        assertTrue(layers["base"]?.get(ColorRGBa.YELLOW)!!.size == 4)
+        assertTrue(layers["base"]?.get(ColorRGBa.YELLOW)!!.size == 1)
     }
 
     @Test
-    fun `group segments by color with specified layers`() {
+    fun `group contours by color with specified layers`() {
         val composition = drawComposition {
             stroke = ColorRGBa.BLUE
             rectangle(20.0, 20.0,20.0, 20.0,)?.attributes?.set("layer", "layer1")
@@ -49,7 +50,7 @@ internal class TestPlotWriter {
             lineSegment(50.0, 50.0, 150.0, 150.0)
         }
 
-        val layers = groupSegmentsByLayerAndColor(composition, 1.0, Vector2.ZERO)
+        val layers = groupContoursByLayerAndColor(composition, 1.0, Vector2.ZERO)
 
         assertTrue(layers.size == 3)
         assertTrue( layers.containsKey("base"))
@@ -59,22 +60,22 @@ internal class TestPlotWriter {
         assertTrue( layers["layer1"]!!.size == 1)
         assertTrue( layers["layer2"]!!.size == 1)
         assertTrue(layers["layer1"]!!.containsKey(ColorRGBa.BLUE))
-        assertTrue(layers["layer1"]?.get(ColorRGBa.BLUE)!!.size == 8)
+        assertTrue(layers["layer1"]?.get(ColorRGBa.BLUE)!!.size == 2)
         assertTrue(layers["layer2"]!!.containsKey(ColorRGBa.YELLOW))
-        assertTrue(layers["layer2"]?.get(ColorRGBa.YELLOW)!!.size == 13)
+        assertTrue(layers["layer2"]?.get(ColorRGBa.YELLOW)!!.size == 4)
     }
 
     @Test
-    fun `order segments within each layer`() {
-        val expected = listOf(
-            LineSegment(0.0, 10.0, 10.0, 10.0).segment,
-            LineSegment(20.0, 10.0, 30.0, 10.0).segment,
-            LineSegment(40.0, 10.0, 50.0, 10.0).segment,
-            LineSegment(60.0, 10.0, 70.0, 10.0).segment,
-            LineSegment(80.0, 10.0, 100.0, 10.0).segment,
+    fun `order contours within each layer`() {
+        val expected = listOf<ShapeContour>(
+            ShapeContour(listOf(LineSegment(0.0, 10.0, 10.0, 10.0).segment,
+                LineSegment(10.0, 10.0, 30.0, 10.0).segment), false),
+            ShapeContour(listOf(LineSegment(40.0, 10.0, 50.0, 10.0).segment,
+                LineSegment(50.0, 10.0, 70.0, 10.0).segment), false),
+            ShapeContour(listOf(LineSegment(80.0, 10.0, 100.0, 10.0).segment), false),
         )
 
-        val segmentLayers: SegmentLayers = mutableMapOf(
+        val contourLayers: ContourLayers = mutableMapOf(
             "base" to mutableMapOf(
                 ColorRGBa.RED to expected.shuffled().toMutableList(),
                 ColorRGBa.BLUE to expected.shuffled().toMutableList(),
@@ -84,12 +85,12 @@ internal class TestPlotWriter {
                 ColorRGBa.BLUE to expected.shuffled().toMutableList(),
             ),
         )
-        orderSegments(segmentLayers)
+        orderContours(contourLayers)
 
-        segmentLayers.forEach { (_, layer) ->
-            layer.forEach { (_, segments) ->
-                assertEquals(expected.size, segments.size)
-                assertEquals(expected, segments)
+        contourLayers.forEach { (_, layer) ->
+            layer.forEach { (_, contours) ->
+                assertEquals(expected.size, contours.size)
+                assertEquals(expected, contours)
             }
         }
     }
