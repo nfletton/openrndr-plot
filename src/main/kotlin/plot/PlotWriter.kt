@@ -13,6 +13,8 @@ import org.openrndr.shape.Segment2D
 import org.openrndr.shape.Shape
 import org.openrndr.shape.ShapeContour
 import java.io.File
+import kotlin.collections.component1
+import kotlin.collections.component2
 import kotlin.math.abs
 import kotlin.math.ceil
 
@@ -49,7 +51,8 @@ enum class DrawTool(val description: String) {
  * @property toolType   The type of drawing tool
  * @property displayScale   The scaling factor from paper size to on-screen sketch dimensions
  * @property pathTolerance   The tolerance for what are considered connected paths
- * @property stepResolution The resolution of a step in plotter movement in millimetres
+ * @property curveTolerance The margin of error
+ * for what's considered a straight line when splitting a Bézier curve into linear segments.
  * @property refillDistance   The stroke length before the drawing medium needs reloading in mm.
  * @property refillTolerance
  * @property duplicateTolerance    Tolerance for removing wholly overlapping segments.
@@ -68,8 +71,8 @@ enum class DrawTool(val description: String) {
 data class PlotConfig(
     val toolType: DrawTool = DrawTool.Pen,
     val displayScale: Double = 1.0,
-    val pathTolerance: Double = 0.25,
-    val stepResolution: Double = 0.25,
+    val pathTolerance: Double = 0.1524,
+    val curveTolerance: Double = 0.05,
     val refillDistance: Double = Double.POSITIVE_INFINITY,
     val refillTolerance: Double = 5.0,
     val preOptions: String = DEFAULT_OPTIONS,
@@ -338,7 +341,7 @@ private fun ShapeContour.toPath(config: PlotConfig): List<Vector2> {
     val path = mutableListOf<Vector2>()
     this.segments.forEach { segment ->
         val points = when (segment.control.size) {
-            1, 2 -> generateCurveSteps(segment, config.stepResolution)
+            1, 2 -> segment.bezierCurveToPoints(config.curveTolerance)
             else -> {
                 if (segment.length <= config.refillDistance) {
                     listOf(segment.start, segment.end)
@@ -514,22 +517,6 @@ private fun findClosestContour(point: Vector2, contours: MutableList<ShapeContou
     ) closestToStart else closestToEnd
 }
 
-/**
- * Generates equidistant points along a given segment based on a step resolution.
- * If the segment length is greater than the step resolution, the segment is divided into
- * equidistant positions and the points are returned. Otherwise, only the start and end points
- * of the segment are returned.
- */
-private fun generateCurveSteps(
-    segment: Segment2D, stepResolution: Double
-): List<Vector2> {
-    val numSteps: Int = ceil(segment.length / stepResolution).toInt()
-    return if (numSteps > 1)
-        segment.equidistantPositions(numSteps).toList()
-    else
-        listOf(segment.start, segment.end)
-}
-
 
 /**
  * Saves the layout of the plot to an SVG file.
@@ -585,6 +572,42 @@ private fun createPaletteLayout(
         }
     }
     return composition
+}
+
+/**
+ * Calculates the points of a Bézier curve using the given curve segment and tolerance.
+ *
+ * @param tolerance The tolerance value used to determine the straightness of the curve segment.
+ * @return The list of points representing the Bézier curve.
+ */
+fun Segment2D.bezierCurveToPoints(tolerance: Double): List<Vector2> {
+    if (this.control.isEmpty()) return listOf(this.start, this.end)
+
+    val result = mutableListOf<Vector2>()
+    approximateCurve(this, tolerance, result)
+    return result
+}
+
+
+/**
+ * Approximates a Bézier curve as linear segments by recursively subdividing
+ * it until each segment is within the specified tolerance.
+ *
+ * @param curve The curve segment to be approximated.
+ * @param tolerance The tolerance value used to determine the approximation accuracy.
+ * @param result The mutable list where the approximated points will be stored.
+ */
+private fun approximateCurve(curve: Segment2D, tolerance: Double, result: MutableList<Vector2>) {
+    if (curve.control.isEmpty() || curve.isStraight(tolerance)) {
+        if (result.isEmpty()) {
+            result.add(curve.start)
+        }
+        result.add(curve.end)
+    } else {
+        val (left, right) = curve.split(0.5)
+        approximateCurve(left, tolerance, result)
+        approximateCurve(right, tolerance, result)
+    }
 }
 
 /**
