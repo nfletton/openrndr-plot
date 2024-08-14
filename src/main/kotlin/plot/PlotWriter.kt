@@ -4,6 +4,7 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import org.openrndr.color.ColorRGBa
 import org.openrndr.color.rgb
 import org.openrndr.extra.composition.*
+import org.openrndr.extra.noise.Random
 import org.openrndr.extra.svg.saveToFile
 import org.openrndr.math.Vector2
 import org.openrndr.math.transforms.transform
@@ -358,7 +359,21 @@ private fun ShapeContour.toPath(config: PlotConfig): List<Vector2> {
             else logger.error { "None contiguous contour segments" }
         }
     }
-    return path
+    return if (config.randomizeStart) path.rotate() else path
+}
+
+/**
+ * Rotate the points of the path by an offset if the path is closed.
+ */
+private fun List<Vector2>.rotate(): List<Vector2> {
+    if (this.first() != this.last()) return this
+
+    val offset = Random.int(0, this.lastIndex - 1)
+    if (offset != 0) {
+        val rotatedPoints = this.drop(offset) + this.slice(1..<offset)
+        return rotatedPoints + rotatedPoints.first()
+    }
+    return this
 }
 
 /**
