@@ -52,7 +52,7 @@ enum class DrawTool(val description: String) {
  * @property toolType   The type of drawing tool
  * @property displayScale   The scaling factor from paper size to on-screen sketch dimensions
  * @property pathTolerance   The tolerance for what are considered connected paths
- * @property curveTolerance The margin of error
+ * @property bezierTolerance The margin of error
  * for what's considered a straight line when splitting a Bézier curve into linear segments.
  * @property refillDistance   The stroke length before the drawing medium needs reloading in mm.
  * @property refillTolerance
@@ -73,7 +73,7 @@ data class PlotConfig(
     val toolType: DrawTool = DrawTool.Pen,
     val displayScale: Double = 1.0,
     val pathTolerance: Double = 0.1524,
-    val curveTolerance: Double = 0.05,
+    val bezierTolerance: Double = 0.05,
     val refillDistance: Double = Double.POSITIVE_INFINITY,
     val refillTolerance: Double = 5.0,
     val preOptions: String = DEFAULT_OPTIONS,
@@ -342,7 +342,7 @@ private fun ShapeContour.toPath(config: PlotConfig): List<Vector2> {
     val path = mutableListOf<Vector2>()
     this.segments.forEach { segment ->
         val points = when (segment.control.size) {
-            1, 2 -> segment.bezierCurveToPoints(config.curveTolerance)
+            1, 2 -> segment.bezierCurveToPoints(config.bezierTolerance)
             else -> {
                 if (segment.length <= config.refillDistance) {
                     listOf(segment.start, segment.end)
