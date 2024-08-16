@@ -14,7 +14,7 @@ fun main() = application {
     }
     program {
         val curve = Segment2D(Vector2(50.0, 50.0), Vector2(400.0, 300.0), Vector2(100.0, 700.0), Vector2(700.0, 700.0))
-        val tolerance = 0.0005
+        val tolerance = 0.0004
         val points = curve.bezierCurveToPoints(tolerance)
 
         extend {

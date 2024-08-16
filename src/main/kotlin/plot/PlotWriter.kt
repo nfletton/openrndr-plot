@@ -73,7 +73,7 @@ data class PlotConfig(
     val toolType: DrawTool = DrawTool.Pen,
     val displayScale: Double = 1.0,
     val pathTolerance: Double = 0.1524,
-    val bezierTolerance: Double = 0.05,
+    val bezierTolerance: Double = 0.0004,
     val refillDistance: Double = Double.POSITIVE_INFINITY,
     val refillTolerance: Double = 5.0,
     val preOptions: String = DEFAULT_OPTIONS,
