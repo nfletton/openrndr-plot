@@ -117,7 +117,8 @@ repositories {
 dependencies {
 
 //    implementation(libs.jsoup)
-//    implementation(libs.gson)
+    implementation(libs.gson)
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.1")
 //    implementation(libs.csv)
 
     /* ORSL dependencies */
