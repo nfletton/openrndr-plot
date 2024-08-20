@@ -10,7 +10,6 @@ import org.openrndr.math.Vector2
 import org.openrndr.math.transforms.transform
 import org.openrndr.panel.elements.round
 import org.openrndr.shape.Rectangle
-import org.openrndr.shape.Segment2D
 import org.openrndr.shape.Shape
 import org.openrndr.shape.ShapeContour
 import java.io.File
@@ -342,7 +341,7 @@ private fun ShapeContour.toPath(config: PlotConfig): List<Vector2> {
     val path = mutableListOf<Vector2>()
     this.segments.forEach { segment ->
         val points = when (segment.control.size) {
-            1, 2 -> segment.bezierCurveToPoints(config.bezierTolerance)
+            1, 2 -> segment.adaptivePositions(config.bezierTolerance)
             else -> {
                 if (segment.length <= config.refillDistance) {
                     listOf(segment.start, segment.end)
@@ -587,42 +586,6 @@ private fun createPaletteLayout(
         }
     }
     return composition
-}
-
-/**
- * Calculates the points of a Bézier curve using the given curve segment and tolerance.
- *
- * @param tolerance The tolerance value used to determine the straightness of the curve segment.
- * @return The list of points representing the Bézier curve.
- */
-fun Segment2D.bezierCurveToPoints(tolerance: Double): List<Vector2> {
-    if (this.control.isEmpty()) return listOf(this.start, this.end)
-
-    val result = mutableListOf<Vector2>()
-    approximateCurve(this, tolerance, result)
-    return result
-}
-
-
-/**
- * Approximates a Bézier curve as linear segments by recursively subdividing
- * it until each segment is within the specified tolerance.
- *
- * @param curve The curve segment to be approximated.
- * @param tolerance The tolerance value used to determine the approximation accuracy.
- * @param result The mutable list where the approximated points will be stored.
- */
-private fun approximateCurve(curve: Segment2D, tolerance: Double, result: MutableList<Vector2>) {
-    if (curve.control.isEmpty() || curve.isStraight(tolerance)) {
-        if (result.isEmpty()) {
-            result.add(curve.start)
-        }
-        result.add(curve.end)
-    } else {
-        val (left, right) = curve.split(0.5)
-        approximateCurve(left, tolerance, result)
-        approximateCurve(right, tolerance, result)
-    }
 }
 
 /**
