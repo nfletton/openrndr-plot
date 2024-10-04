@@ -50,7 +50,7 @@ enum class DrawTool(val description: String) {
  *
  * @property toolType   The type of drawing tool
  * @property displayScale   The scaling factor from paper size to on-screen sketch dimensions
- * @property border
+ * @property border     The inset border of the sketch within the paper in on-screen display units
  * @property pathTolerance   The tolerance for what are considered connected paths
  * @property bezierTolerance The margin of error
  * for what's considered a straight line when splitting a Bézier curve into linear segments.
@@ -59,7 +59,7 @@ enum class DrawTool(val description: String) {
  * @property duplicateTolerance    Tolerance for removing wholly overlapping segments.
  * @property preOptions    AxiDraw options to run before the plot begins
  * @property randomizeStart    Randomize the start point of closed paths
- * @property paperSize    The dimensions of the plotting area
+ * @property paperSize    The dimensions of the plotting area in mm units
  * @property palette   Color palette. All colors must have alpha of 1.0.
  * @property paperOffset   Paper position relative to the AxiDraw home position
  * @property paintWells    A map of [ColorRGBa] to a list of [Rectangle]s
@@ -228,7 +228,7 @@ internal class RefillData(private val config: PlotConfig) {
  */
 fun Composition.saveAxiDrawFileSet(baseFilename: String, config: PlotConfig) {
     val groupedContours =
-        groupContoursByLayerAndColor(this, config.displayScale, config.paperOffset)
+        groupContoursByLayerAndColor(this, config.displayScale, config.border, config.paperOffset)
     orderContours(groupedContours)
 
     val refillData = RefillData(config)
@@ -457,7 +457,7 @@ private fun getEffectiveColor(stroke: ColorRGBa?): ColorRGBa {
  * Groups contours of ShapeNodes by layer and color.
  */
 internal fun groupContoursByLayerAndColor(
-    composition: Composition, displayScale: Double, paperOffset: Vector2
+    composition: Composition, displayScale: Double, border: Vector2, paperOffset: Vector2
 ): ContourLayers {
     var currentLayer = DEFAULT_LAYER_NAME
     val contourLayers: ContourLayers = mutableMapOf(currentLayer to mutableMapOf())
@@ -476,7 +476,7 @@ internal fun groupContoursByLayerAndColor(
             }
             ensureLayerAndColorArePresent(currentLayer, currentColor)
             contourLayers[currentLayer]?.get(currentColor)!! += this.shape.transformContours(
-                displayScale, paperOffset
+                displayScale, border, paperOffset
             )
         }
     }
@@ -487,10 +487,11 @@ internal fun groupContoursByLayerAndColor(
  * Transform shape contours to paper size and position
  */
 internal fun Shape.transformContours(
-    displayScale: Double, paperPosition: Vector2
+    displayScale: Double, border: Vector2, paperOffset: Vector2
 ): List<ShapeContour> = this.transform(transform {
-    translate(paperPosition)
+    translate(paperOffset)
     scale(1 / displayScale)
+    translate(border)
 }).contours
 
 
