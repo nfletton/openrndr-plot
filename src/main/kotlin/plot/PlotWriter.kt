@@ -50,6 +50,7 @@ enum class DrawTool(val description: String) {
  *
  * @property toolType   The type of drawing tool
  * @property displayScale   The scaling factor from paper size to on-screen sketch dimensions
+ * @property border
  * @property pathTolerance   The tolerance for what are considered connected paths
  * @property bezierTolerance The margin of error
  * for what's considered a straight line when splitting a Bézier curve into linear segments.
@@ -71,6 +72,7 @@ enum class DrawTool(val description: String) {
 data class PlotConfig(
     val toolType: DrawTool = DrawTool.Pen,
     val displayScale: Double = 1.0,
+    val border: Vector2 = Vector2.ZERO,
     val pathTolerance: Double = 0.1524,
     val bezierTolerance: Double = 0.05,
     val refillDistance: Double = Double.POSITIVE_INFINITY,
@@ -234,7 +236,7 @@ fun Composition.saveAxiDrawFileSet(baseFilename: String, config: PlotConfig) {
 
     writeAxiDrawFile(plotData, baseFilename)
     saveLayoutToSvgFile(baseFilename, refillData, config)
-    savePlotToSvgFile(config.displayScale, baseFilename)
+    savePlotToSvgFile(config.displayScale, config.border, baseFilename)
 }
 
 
@@ -248,11 +250,15 @@ private fun writeAxiDrawFile(data: String, baseFilename: String) {
  * based on paper size (i) it scales the SVG document to the desired paper
  * size (ii) scales the sketch to the paper size.
  */
-fun Composition.savePlotToSvgFile(displayScale: Double, filename: String) {
+fun Composition.savePlotToSvgFile(displayScale: Double, border: Vector2, filename: String) {
     val origTransform = root.transform
     val origWidth = style.width
     val origHeight = style.height
-    root.transform = transform { scale(CONVERSION_FACTOR / displayScale) }
+    root.transform =
+            transform {
+                scale(CONVERSION_FACTOR / displayScale)
+                translate(border)
+            }
     style.width = Length.Pixels.fromMillimeters(style.width.value / displayScale)
     style.height = Length.Pixels.fromMillimeters(style.height.value / displayScale)
     saveToFile(File("$filename.svg"))
