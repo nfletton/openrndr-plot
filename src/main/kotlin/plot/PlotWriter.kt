@@ -31,6 +31,7 @@ private const val DEFAULT_OPTIONS =
     "# max. safe pen up 67\n" +
     "options pen_pos_up 48\n" +
     "options pen_pos_down 33\n" +
+    "options accel 50\n" +
     "options speed_pendown 10\n" +
     "options speed_penup 35\n"
 
