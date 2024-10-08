@@ -22,13 +22,9 @@ import kotlin.math.ceil
 val logger = KotlinLogging.logger { }
 
 private const val DEFAULT_OPTIONS =
-    "# SE/A3\n" +
     "options model 2\n" +
-    "# brushless servo\n" +
-    "#options penlift 3\n" +
-    "# millimeter unit\n" +
+    "options penlift 3\n" +
     "options units 2\n" +
-    "# max. safe pen up 67\n" +
     "options pen_pos_up 48\n" +
     "options pen_pos_down 33\n" +
     "options accel 50\n" +
@@ -217,7 +213,7 @@ internal class RefillData(private val config: PlotConfig) {
     fun cmdDefinitions(): String =
         (refillCommands.values.flatten() + washCommands).joinToString(separator = "\n") {
             "def ${it.commandName} ${it.command}"
-        } + "\n"
+        }
 
 }
 
@@ -277,9 +273,9 @@ internal fun generatePlotData(
     contourLayers: ContourLayers, refillData: RefillData, config: PlotConfig
 ): String {
     return buildString {
-        append("${refillData.cmdDefinitions()}\n")
-        append("${config.preOptions}\nupdate\n")
-
+        append("${config.preOptions}")
+        append("# OPTIONS: END\n"        )
+        append("${refillData.cmdDefinitions()}")
         append("penup\n")
         var location = Vector2.ZERO
         var currentColor = ColorRGBa.BLACK
