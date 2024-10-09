@@ -252,10 +252,10 @@ fun Composition.savePlotToSvgFile(displayScale: Double, border: Vector2, filenam
     val origWidth = style.width
     val origHeight = style.height
     root.transform =
-            transform {
-                scale(CONVERSION_FACTOR / displayScale)
-                translate(border)
-            }
+        transform {
+            scale(CONVERSION_FACTOR / displayScale)
+            translate(border)
+        }
     style.width = Length.Pixels.fromMillimeters(style.width.value / displayScale)
     style.height = Length.Pixels.fromMillimeters(style.height.value / displayScale)
     saveToFile(File("$filename.svg"))
@@ -274,8 +274,8 @@ internal fun generatePlotData(
 ): String {
     return buildString {
         append("${config.preOptions}")
-        append("# OPTIONS: END\n"        )
         append("${refillData.cmdDefinitions()}")
+        append("# HEADER: END\n")
         append("penup\n")
         var location = Vector2.ZERO
         var currentColor = ColorRGBa.BLACK
