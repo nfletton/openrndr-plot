@@ -167,7 +167,7 @@ internal class RefillData(private val config: PlotConfig) {
         wells.asIterable().associate { (color, wells) ->
             color to List(wells.size) { wellIndex ->
                 generateWellPathCommand(
-                    "refill_${config.palette[color]}_w${wellIndex}",
+                    "refill_${config.palette[color]?.replace(" ", "_")}_w${wellIndex}",
                     stirPaths[color]!![wellIndex]
                 )
             }
