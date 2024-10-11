@@ -21,15 +21,16 @@ import kotlin.math.ceil
 
 val logger = KotlinLogging.logger { }
 
-private const val DEFAULT_OPTIONS =
-    "options model 2\n" +
-    "options penlift 3\n" +
-    "options units 2\n" +
-    "options pen_pos_up 48\n" +
-    "options pen_pos_down 33\n" +
-    "options accel 50\n" +
-    "options speed_pendown 10\n" +
-    "options speed_penup 35\n"
+private val DEFAULT_OPTIONS = mutableMapOf(
+    "model" to 2,
+    "penlift" to 3,
+    "units" to 2,
+    "pen_pos_up" to 48,
+    "pen_pos_down" to 33,
+    "accel" to 50,
+    "speed_pendown" to 10,
+    "speed_penup" to 35,
+)
 
 private const val DEFAULT_LAYER_NAME = "base"
 
@@ -74,7 +75,7 @@ data class PlotConfig(
     val bezierTolerance: Double = 0.05,
     val refillDistance: Double = Double.POSITIVE_INFINITY,
     val refillTolerance: Double = 5.0,
-    val preOptions: String = DEFAULT_OPTIONS,
+    val preOptions: MutableMap<String, Int> = DEFAULT_OPTIONS,
     val randomizeStart: Boolean = true,
     val duplicateTolerance: Double = Double.POSITIVE_INFINITY,
     val paperSize: PaperSize = PaperSize.ART_9x12,
@@ -89,6 +90,7 @@ data class PlotConfig(
 ) {
     init {
         require(eachColorHasAWell()) { "Each color in the palette must have an associated well" }
+        preOptions["units"] = 2
     }
 
     fun eachColorHasAWell() = if (toolType == DrawTool.Dip || toolType == DrawTool.DipAndStir) {
@@ -273,9 +275,10 @@ internal fun generatePlotData(
     contourLayers: ContourLayers, refillData: RefillData, config: PlotConfig
 ): String {
     return buildString {
-        append("${config.preOptions}")
+        append(config.preOptions.map { (key, value) -> "options ${key} ${value}\n" }.joinToString(""))
+        append("# END_OPTIONS\n")
         append("${refillData.cmdDefinitions()}")
-        append("# HEADER: END\n")
+        append("# END_DEFINITIONS\n")
         append("penup\n")
         var location = Vector2.ZERO
         var currentColor = ColorRGBa.BLACK
