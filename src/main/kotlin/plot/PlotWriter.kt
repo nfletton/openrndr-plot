@@ -213,8 +213,8 @@ internal class RefillData(private val config: PlotConfig) {
      * Builds a string containing all the command definitions for the output file.
      */
     fun cmdDefinitions(): String =
-        (refillCommands.values.flatten() + washCommands).joinToString(separator = "\n") {
-            "def ${it.commandName} ${it.command}"
+        (refillCommands.values.flatten() + washCommands).joinToString(separator = "") {
+            "def ${it.commandName} ${it.command}\n"
         }
 
 }
