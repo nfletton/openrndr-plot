@@ -184,7 +184,7 @@ internal class RefillData(private val config: PlotConfig) {
         }
 
     /**
-     * Generates a well path command definition.
+     * Generates a paint or wash well path command definition.
      */
     private fun generateWellPathCommand(
         cmdName: String, path: List<Vector2>
@@ -214,7 +214,7 @@ internal class RefillData(private val config: PlotConfig) {
      */
     fun cmdDefinitions(): String =
         (refillCommands.values.flatten() + washCommands).joinToString(separator = "") {
-            "def ${it.commandName} ${it.command}\n"
+            "${it.commandName} ${it.command}\n"
         }
 
 }
@@ -246,8 +246,8 @@ private fun writeAxiDrawFile(data: String, baseFilename: String) {
 
 /**
  * Saves the composition to an SVG file and, assuming the onscreen display dimensions are
- * based on paper size (i) it scales the SVG document to the desired paper
- * size (ii) scales the sketch to the paper size.
+ * based on paper size: (i) it scales the SVG document to the desired paper
+ * size, (ii) scales the sketch to the paper size.
  */
 fun Composition.savePlotToSvgFile(displayScale: Double, border: Vector2, filename: String) {
     val origTransform = root.transform
@@ -275,10 +275,10 @@ internal fun generatePlotData(
     contourLayers: ContourLayers, refillData: RefillData, config: PlotConfig
 ): String {
     return buildString {
-        append(config.preOptions.map { (key, value) -> "options ${key} ${value}\n" }.joinToString(""))
-        append("# END_OPTIONS\n")
-        append("${refillData.cmdDefinitions()}")
-        append("# END_DEFINITIONS\n")
+        append(config.preOptions.map { (key, value) -> "$key ${value}\n" }.joinToString(""))
+        append("::END_OPTIONS::\n")
+        append(refillData.cmdDefinitions())
+        append("::END_DEFINITIONS::\n")
         append("penup\n")
         var location = Vector2.ZERO
         var currentColor = ColorRGBa.BLACK
@@ -287,8 +287,10 @@ internal fun generatePlotData(
             layer.forEach { (color, contours) ->
                 if (contours.isNotEmpty()) {
                     if (config.toolType == DrawTool.Pen && currentColor != color) {
-                        append("pause Color Change to ${config.palette[color]}\n")
-                        currentColor = color
+                        if (config.palette.containsKey(color)) {
+                            append("pause Change Color to ${config.palette[color]}\n")
+                            currentColor = color
+                        }
                     }
                     val paths = mergePaths(contours.map { it.toPath(config) }, config.pathTolerance)
 
@@ -317,7 +319,7 @@ internal fun generatePlotData(
  * @param paths The input paths to be merged. Each path is represented as a list of Vector2 points.
  * @param tolerance The maximum distance allowed between the end point of one path and the start point of the next path
  *                  in order for the paths to be merged.
- * @return The merged paths as a list of lists of Vector2 points.
+ * @return The merged paths as a list of Vector2 lists.
  */
 private fun mergePaths(paths: List<List<Vector2>>, tolerance: Double): List<List<Vector2>> {
     val mergedPaths = mutableListOf<MutableList<Vector2>>()
