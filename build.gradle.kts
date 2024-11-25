@@ -107,6 +107,7 @@ plugins {
     alias(libs.plugins.runtime)
     alias(libs.plugins.gitarchive.tomarkdown).apply(false)
     alias(libs.plugins.versions)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 repositories {
@@ -117,8 +118,6 @@ repositories {
 dependencies {
 
 //    implementation(libs.jsoup)
-    implementation(libs.gson)
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.1")
 //    implementation(libs.csv)
 
     /* ORSL dependencies */
@@ -133,6 +132,8 @@ dependencies {
 //    implementation(libs.orsl.extension.sdf)
 
     implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.kotlinx.serialization.core)
+    implementation(libs.kotlinx.serialization.json)
     implementation(libs.slf4j.api)
     implementation(libs.kotlin.logging)
 
@@ -162,9 +163,9 @@ java {
 }
 kotlin {
     compilerOptions {
-        languageVersion.set(KotlinVersion.KOTLIN_2_0)
-        apiVersion.set(KotlinVersion.KOTLIN_2_0)
-        jvmTarget.set(JvmTarget.JVM_17)
+        languageVersion = KotlinVersion.KOTLIN_2_0
+        apiVersion = KotlinVersion.KOTLIN_2_0
+        jvmTarget = JvmTarget.JVM_17
     }
 }
 
@@ -174,7 +175,7 @@ project.setProperty("mainClassName", applicationMainClass)
 
 application {
     if (hasProperty("openrndr.application")) {
-        mainClass.set("${property("openrndr.application")}")
+        mainClass = "${property("openrndr.application")}"
     }
 }
 
@@ -213,7 +214,7 @@ tasks {
 // ------------------------------------------------------------------------------------------------------------------ //
 
 tasks.register<Zip>("jpackageZip") {
-    archiveFileName.set("openrndr-application.zip")
+    archiveFileName = "openrndr-application.zip"
     from("${layout.buildDirectory.get()}/jpackage") {
         include("**/*")
     }
@@ -231,14 +232,14 @@ runtime {
             jvmArgs.add("-Duser.dir=${"$"}APPDIR/../Resources")
         }
     }
-    options.set(listOf("--strip-debug", "--compress", "1", "--no-header-files", "--no-man-pages"))
-    modules.set(listOf("jdk.unsupported", "java.management", "java.desktop"))
+    options = listOf("--strip-debug", "--compress", "1", "--no-header-files", "--no-man-pages")
+    modules = listOf("jdk.unsupported", "java.management", "java.desktop")
 }
 
 // ------------------------------------------------------------------------------------------------------------------ //
 
 tasks.register<org.openrndr.extra.gitarchiver.GitArchiveToMarkdown>("gitArchiveToMarkDown") {
-    historySize.set(20)
+    historySize = 20
 }
 
 // ------------------------------------------------------------------------------------------------------------------ //
