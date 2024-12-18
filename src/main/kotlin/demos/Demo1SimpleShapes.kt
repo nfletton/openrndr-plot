@@ -14,6 +14,12 @@ import org.openrndr.shape.Circle
 import org.openrndr.shape.Rectangle
 import org.openrndr.shape.Triangle
 import plot.saveAxiDrawFileSet
+    
+/**
+ * id: 97a04125-4a63-4fd6-972b-903a3186f15d
+ * description: New sketch
+ * tags: #new
+ */    
 
 private val screenScale: Double
     get() = 3.0

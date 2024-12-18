@@ -24,7 +24,6 @@ val logger = KotlinLogging.logger { }
 private val DEFAULT_OPTIONS = mutableMapOf(
     "model" to 2,
     "penlift" to 3,
-    "units" to 2,
     "pen_pos_up" to 48,
     "pen_pos_down" to 33,
     "accel" to 50,
@@ -36,6 +35,7 @@ private const val DEFAULT_LAYER_NAME = "base"
 
 private const val CONVERSION_FACTOR = 96 / 25.4
 
+private const val DECIMALS = 3
 
 enum class DrawTool(val description: String) {
     Pen("A pen that may optionally need swapping out or refilling"),
@@ -55,7 +55,8 @@ enum class DrawTool(val description: String) {
  * @property refillDistance   The stroke length before the drawing medium needs reloading in mm.
  * @property refillTolerance
  * @property duplicateTolerance    Tolerance for removing wholly overlapping segments.
- * @property preOptions    AxiDraw options to run before the plot begins
+ * @property defaultOptions    AxiDraw options to run before the plot begins
+ * @property refillOptions    AxiDraw options that override default options during dip refills
  * @property randomizeStart    Randomize the start point of closed paths
  * @property paperSize    The dimensions of the plotting area in mm units
  * @property palette   Color palette. All colors must have alpha of 1.0.
@@ -75,7 +76,8 @@ data class PlotConfig(
     val bezierTolerance: Double = 0.05,
     val refillDistance: Double = Double.POSITIVE_INFINITY,
     val refillTolerance: Double = 5.0,
-    val preOptions: MutableMap<String, Int> = DEFAULT_OPTIONS,
+    val defaultOptions: MutableMap<String, Int> = DEFAULT_OPTIONS,
+    val refillOptions: Map<String, Int> = mutableMapOf<String, Int>(),
     val randomizeStart: Boolean = true,
     val duplicateTolerance: Double = Double.POSITIVE_INFINITY,
     val paperSize: PaperSize = PaperSize.ART_9x12,
@@ -83,21 +85,64 @@ data class PlotConfig(
     val paperOffset: Vector2 = Vector2.ZERO,
     val paintWells: Map<ColorRGBa, List<Rectangle>> = emptyMap(),
     val washWells: List<Rectangle> = emptyList(),
-    val wellPadding: Double = 4.0,
+    val wellPadding: Double = 6.0,
     val paintStirStrokes: Int = 4,
     val washStirStrokes: Int = 4,
     val axiDrawTravel: AxiDrawTravel = AxiDrawTravel.V3A3,
 ) {
+    internal var utilCommands: String
+
     init {
         require(eachColorHasAWell()) { "Each color in the palette must have an associated well" }
-        preOptions["units"] = 2
+        require(eachRefillOptionHasADefault()) { "Each refill option should have a corresponding default value" }
+        defaultOptions["units"] = 2    // only supports millimetres
+
+        utilCommands = generateUtilCommands()
     }
 
-    fun eachColorHasAWell() = if (toolType == DrawTool.Dip || toolType == DrawTool.DipAndStir) {
-        palette.all { (color, _) -> paintWells.containsKey(color) }
-    } else true
+    private fun generateUtilCommands() = buildString {
+        if (refillOptions.isNotEmpty()) {
+            append("refill_options ", refillOptions())
+            append("default_options ", defaultOptions())
+        }
+        append("go_home ", homeCommand())
+    }
 
-    val requiresRefills: Boolean
+    private fun refillOptions() =
+        buildString {
+            for ((option, value) in refillOptions) {
+                append("$option $value | ")
+            }
+            append("update\n")
+        }
+
+    private fun defaultOptions() =
+        buildString {
+            for (option in refillOptions.keys) {
+                append("$option ${defaultOptions[option]} | ")
+            }
+            append("update\n")
+        }
+
+    private fun homeCommand() =
+        buildString {
+            if (refillOptions.isNotEmpty())
+                append("refill_options | ")
+            append("moveto 0 0\n")
+        }
+
+    internal fun eachColorHasAWell() =
+        if (toolType == DrawTool.Dip || toolType == DrawTool.DipAndStir) {
+            palette.all { (color, _) -> paintWells.containsKey(color) }
+        } else true
+
+    private fun eachRefillOptionHasADefault() =
+        defaultOptions.keys.containsAll(refillOptions.keys)
+
+    val hasRefillOptions: Boolean
+        get() = refillOptions.isNotEmpty()
+
+    val requiresManualRefills: Boolean
         get() = refillDistance < Double.POSITIVE_INFINITY
 
     val requiresWash: Boolean
@@ -106,7 +151,7 @@ data class PlotConfig(
     val requiresStir: Boolean
         get() = toolType == DrawTool.DipAndStir
 
-    val isPainting: Boolean
+    val requiresDipping: Boolean
         get() = toolType == DrawTool.Dip || toolType == DrawTool.DipAndStir
 }
 
@@ -123,18 +168,20 @@ internal class RefillData(private val config: PlotConfig) {
 
     init {
         stirPaths =
-            if (config.requiresStir)
-                config.paintWells.asIterable().associate { (color, wells) ->
+            config.paintWells.asIterable().associate { (color, wells) ->
+                if (config.requiresStir)
                     color to generateStirPaths(wells, config.paintStirStrokes, config.wellPadding)
-                }
-            else emptyMap()
+                else
+                    color to wells.map { listOf(it.center) }
+            }
+
         washPaths =
             if (config.requiresWash) generateStirPaths(
                 config.washWells, config.washStirStrokes, config.wellPadding
             )
             else emptyList()
-        refillCommands = generateRefillCommands(config.paintWells)
-        washCommands = generateWashCommands(config.washWells)
+        refillCommands = generateRefillCommands(config.paintWells, config.hasRefillOptions)
+        washCommands = generateWashCommands(config.washWells, config.hasRefillOptions)
     }
 
     /**
@@ -162,35 +209,54 @@ internal class RefillData(private val config: PlotConfig) {
      * Generates refill commands for each color and well.
      */
     private fun generateRefillCommands(
-        wells: Map<ColorRGBa, List<Rectangle>>
+        wells: Map<ColorRGBa, List<Rectangle>>,
+        hasRefillOptions: Boolean
     ): Map<ColorRGBa, List<WellCommand>> =
         wells.asIterable().associate { (color, wells) ->
             color to List(wells.size) { wellIndex ->
                 generateWellPathCommand(
                     "refill_${config.palette[color]?.replace(" ", "_")}_w${wellIndex}",
-                    stirPaths[color]!![wellIndex]
+                    getStirPath(color, wellIndex),
+                    hasRefillOptions
                 )
             }
         }
+
+    private fun getStirPath(
+        color: ColorRGBa,
+        wellIndex: Int
+    ): List<Vector2> =
+        stirPaths[color]?.get(wellIndex) ?: emptyList()
 
     /**
      * Generates wash commands for the given list of wells.
      */
     private fun generateWashCommands(
-        wells: List<Rectangle>
+        wells: List<Rectangle>,
+        hasRefillOptions: Boolean
     ): List<WellCommand> =
         List(wells.size) { wellIndex ->
-            generateWellPathCommand("wash_w${wellIndex}", washPaths[wellIndex])
+            generateWellPathCommand("wash_w${wellIndex}", washPaths[wellIndex], hasRefillOptions)
         }
 
     /**
      * Generates a paint or wash well path command definition.
      */
     private fun generateWellPathCommand(
-        cmdName: String, path: List<Vector2>
+        cmdName: String, stirPath: List<Vector2>, hasRefillOptions: Boolean
     ): WellCommand {
-        val cmdDef = "draw_path ${roundAndStringify(path)}"
-        return WellCommand(path.first(), cmdName, cmdDef)
+        val (x, y) = stirPath.first()
+        val cmdDef = buildString {
+            if (hasRefillOptions)
+                append("refill_options | ")
+            append("moveto ${x.round(DECIMALS)} ${y.round(DECIMALS)} | ")
+            if (stirPath.size == 1) {
+                append("pendown | penup")
+            } else {
+                append("draw_path ${roundAndStringify(stirPath)}")
+            }
+        }
+        return WellCommand(stirPath.first(), cmdName, cmdDef)
     }
 
     private fun getNearestWellCmd(
@@ -216,7 +282,6 @@ internal class RefillData(private val config: PlotConfig) {
         (refillCommands.values.flatten() + washCommands).joinToString(separator = "") {
             "${it.commandName} ${it.command}\n"
         }
-
 }
 
 
@@ -275,9 +340,10 @@ internal fun generatePlotData(
     contourLayers: ContourLayers, refillData: RefillData, config: PlotConfig
 ): String {
     return buildString {
-        append(config.preOptions.map { (key, value) -> "$key ${value}\n" }.joinToString(""))
+        append(config.defaultOptions.map { (key, value) -> "$key ${value}\n" }.joinToString(""))
         append("::END_OPTIONS::\n")
         append(refillData.cmdDefinitions())
+        append(config.utilCommands)
         append("::END_DEFINITIONS::\n")
         append("penup\n")
         var location = Vector2.ZERO
@@ -295,11 +361,11 @@ internal fun generatePlotData(
                     val paths = mergePaths(contours.map { it.toPath(config) }, config.pathTolerance)
 
                     when {
-                        config.isPainting -> append(
-                            writeStrokesAndRefills(paths, refillData, config, color, location)
+                        config.requiresDipping -> append(
+                            writePathsAndRefills(paths, refillData, config, color, location)
                         )
 
-                        config.requiresRefills -> append(writePathsAndRefillPauses(paths, config))
+                        config.requiresManualRefills -> append(writePathsAndRefillPauses(paths, config))
 
                         else -> paths.forEach {
                             append("draw_path ${roundAndStringify(it)}\n")
@@ -309,7 +375,7 @@ internal fun generatePlotData(
                 }
             }
         }
-        append("moveto 0 0\n")
+        append("go_home\n")
     }
 }
 
@@ -384,9 +450,9 @@ private fun List<Vector2>.rotate(): List<Vector2> {
 }
 
 /**
- * Writes the strokes and refills for the given paths, config, color and lastLocation.
+ * Writes the paths and refills for a color.
  */
-private fun writeStrokesAndRefills(
+private fun writePathsAndRefills(
     paths: List<List<Vector2>>,
     refillData: RefillData,
     config: PlotConfig,
@@ -394,7 +460,6 @@ private fun writeStrokesAndRefills(
     lastLocation: Vector2
 ): String {
     val strokes: MutableList<List<Vector2>> = mutableListOf()
-    val sb: StringBuilder = StringBuilder()
 
     paths.forEach { path ->
         val strokePoints = mutableListOf<Vector2>()
@@ -419,13 +484,20 @@ private fun writeStrokesAndRefills(
         }
     }
     var currentLocation = lastLocation
-    if (config.requiresWash) sb.append(refillData.getNearestWashWellCmd(currentLocation))
-    strokes.forEach { stroke ->
-        sb.append(refillData.getNearestPaintWellCmd(color, currentLocation))
-        sb.append("draw_path ${roundAndStringify(stroke)}\n")
-        currentLocation = stroke.last()
+    return buildString {
+        if (config.requiresWash) append(refillData.getNearestWashWellCmd(currentLocation))
+        strokes.forEach { stroke ->
+            append(refillData.getNearestPaintWellCmd(color, currentLocation))
+            val (nextX, nextY) = stroke.first()
+            if (config.hasRefillOptions) {
+                // restore default options after moving to the next stroke start position
+                append("moveto ${nextX.round(DECIMALS)} ${nextY.round(DECIMALS)} \n")
+                append("default_options\n")
+            }
+            append("draw_path ${roundAndStringify(stroke)}\n")
+            currentLocation = stroke.last()
+        }
     }
-    return sb.toString()
 }
 
 /**
@@ -439,7 +511,7 @@ private fun writePathsAndRefillPauses(paths: List<List<Vector2>>, config: PlotCo
     return buildString {
         paths.forEach { path ->
             if (distanceSoFar > config.refillDistance) {
-                append("moveto 0 0\n")
+                append("go_home\n")
                 append("pause refill pen\n")
                 distanceSoFar = 0.0
             }
@@ -550,9 +622,11 @@ internal fun saveLayoutToSvgFile(filename: String, refillData: RefillData, confi
     val layout = drawComposition {
         strokeWeight = 0.5
         composition(createPaletteLayout(config.paintWells, config.washWells))
+        stroke = ColorRGBa.WHITE
         refillData.stirPaths.forEach { (_, paths) ->
             addPathContours(paths)
         }
+        stroke = ColorRGBa.BLACK
         addPathContours(refillData.washPaths)
         rectangle(
             config.paperOffset.x,
@@ -601,7 +675,7 @@ private fun createPaletteLayout(
  * Rounds the coordinates of each Vector2 in the given list to the specified number of decimals
  * and converts the result to a string representation with no embedded whitespace.
  */
-internal fun roundAndStringify(points: List<Vector2>, decimals: Int = 3): String =
+internal fun roundAndStringify(points: List<Vector2>, decimals: Int = DECIMALS): String =
     points.map {
         "[${it.x.round(decimals)},${it.y.round(decimals)}]"
     }.toString().replace("\\s".toRegex(), "")

@@ -19,6 +19,12 @@ import plot.DrawTool
 import plot.PaperSize
 import plot.PlotConfig
 import plot.saveAxiDrawFileSet
+    
+/**
+ * id: 597a4d58-06b3-4569-87b7-c229093b5a67
+ * description: New sketch
+ * tags: #new
+ */    
 
 private val screenScale: Double
     get() = 3.0

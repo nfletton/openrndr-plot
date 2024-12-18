@@ -10,6 +10,12 @@ import org.openrndr.math.Vector2
 import org.openrndr.math.transforms.transform
 import org.openrndr.shape.Segment2D
 import org.openrndr.shape.ShapeContour
+    
+/**
+ * id: 85bfafc8-4ccf-47ec-8f48-d28ebfda5cb6
+ * description: New sketch
+ * tags: #new
+ */    
 
 
 fun main() = application {

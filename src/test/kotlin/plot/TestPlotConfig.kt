@@ -44,10 +44,10 @@ class TestPlotConfig {
     @Test
     fun `requiresRefills should return true if refillDistance is less than positive infinity`() {
         val plotConfig1 = PlotConfig(refillDistance = Double.POSITIVE_INFINITY)
-        assertFalse(plotConfig1.requiresRefills)
+        assertFalse(plotConfig1.requiresManualRefills)
 
         val plotConfig2 = PlotConfig(refillDistance = 5.0)
-        assertTrue(plotConfig2.requiresRefills)
+        assertTrue(plotConfig2.requiresManualRefills)
     }
 
     @Test

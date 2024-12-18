@@ -26,7 +26,7 @@ internal class TestPlotWriter {
             circle(50.0, 50.0, 20.0,)
         }
 
-        val layers = groupContoursByLayerAndColor(composition, 1.0, Vector2.ZERO)
+        val layers = groupContoursByLayerAndColor(composition, 1.0, Vector2.ZERO, Vector2.ZERO)
 
         assertTrue(layers.size == 1)
         assertTrue( layers.containsKey("base"))
@@ -50,7 +50,7 @@ internal class TestPlotWriter {
             lineSegment(50.0, 50.0, 150.0, 150.0)
         }
 
-        val layers = groupContoursByLayerAndColor(composition, 1.0, Vector2.ZERO)
+        val layers = groupContoursByLayerAndColor(composition, 1.0, Vector2.ZERO, Vector2.ZERO)
 
         assertTrue(layers.size == 3)
         assertTrue( layers.containsKey("base"))
