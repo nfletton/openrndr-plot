@@ -110,26 +110,24 @@ data class PlotConfig(
 
     private fun refillOptions() =
         buildString {
-            for ((option, value) in refillOptions) {
-                append("$option $value | ")
+            var separator = ""
+            refillOptions.forEach {(option, value) ->
+                append("$separator$option $value")
+                separator = " | "
             }
-            append("update\n")
+            append("\n")
         }
 
     private fun defaultOptions() =
         buildString {
-            for (option in refillOptions.keys) {
-                append("$option ${defaultOptions[option]} | ")
+            refillOptions.keys.forEachIndexed {i, option ->
+                if (i > 0) append(" | ")
+                append("$option ${defaultOptions[option]}")
             }
-            append("update\n")
+            append("\n")
         }
 
-    private fun homeCommand() =
-        buildString {
-            if (refillOptions.isNotEmpty())
-                append("refill_options | ")
-            append("moveto 0 0\n")
-        }
+    private fun homeCommand() = "moveto 0 0\n"
 
     internal fun eachColorHasAWell() =
         if (toolType == DrawTool.Dip || toolType == DrawTool.DipAndStir) {
@@ -248,13 +246,16 @@ internal class RefillData(private val config: PlotConfig) {
         val (x, y) = stirPath.first()
         val cmdDef = buildString {
             if (hasRefillOptions)
-                append("refill_options | ")
-            append("moveto ${x.round(DECIMALS)} ${y.round(DECIMALS)} | ")
+                append("refill_options")
             if (stirPath.size == 1) {
-                append("pendown | penup")
+                append(" | pendown | penup")
             } else {
-                append("draw_path ${roundAndStringify(stirPath)}")
+                append(" | draw_path ${roundAndStringify(stirPath)}")
             }
+            if (hasRefillOptions) {
+                append(" | default_options")
+            }
+
         }
         return WellCommand(stirPath.first(), cmdName, cmdDef)
     }
@@ -489,11 +490,6 @@ private fun writePathsAndRefills(
         strokes.forEach { stroke ->
             append(refillData.getNearestPaintWellCmd(color, currentLocation))
             val (nextX, nextY) = stroke.first()
-            if (config.hasRefillOptions) {
-                // restore default options after moving to the next stroke start position
-                append("moveto ${nextX.round(DECIMALS)} ${nextY.round(DECIMALS)} \n")
-                append("default_options\n")
-            }
             append("draw_path ${roundAndStringify(stroke)}\n")
             currentLocation = stroke.last()
         }
