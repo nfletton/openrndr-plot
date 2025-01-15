@@ -90,18 +90,22 @@ fun main() = application {
             fill = ColorRGBa.WHITE
             stroke = ColorRGBa.DARK_GREEN
             strokeWeight = 1.0
-            // default 'base' layer
+            // default layer
             rectangle(drawArea)
             fill = null
             strokeWeight = 0.6.fromMillimetres()
-            // 'layer1'
-            stroke = ColorRGBa.CHOCOLATE
-            circle(Circle(p(Vector2(0.5, 0.5)), 25.0.fromMillimetres()))?.attributes?.set("layer", "layer1")
-            shape(Triangle(p(Vector2(0.2, 0.2)), p(Vector2(0.8, 0.2)), p(Vector2(0.5, 0.8))).shape)
-            stroke = ColorRGBa.BLUE_STEEL
-            lineSegment(p(Vector2(0.5, 0.5)), p(Vector2(0.2, 0.2)))?.attributes?.set("layer", "layer2")
-            lineSegment(p(Vector2(0.5, 0.5)), p(Vector2(0.8, 0.2)))
-            lineSegment(p(Vector2(0.5, 0.5)), p(Vector2(0.5, 0.8)))
+
+            group {
+                stroke = ColorRGBa.CHOCOLATE
+                circle(Circle(p(Vector2(0.5, 0.5)), 25.0.fromMillimetres()))
+                shape(Triangle(p(Vector2(0.2, 0.2)), p(Vector2(0.8, 0.2)), p(Vector2(0.5, 0.8))).shape)
+            }.attributes["data-layer"] = "layer1"
+            group {
+                stroke = ColorRGBa.BLUE_STEEL
+                lineSegment(p(Vector2(0.5, 0.5)), p(Vector2(0.2, 0.2)))
+                lineSegment(p(Vector2(0.5, 0.5)), p(Vector2(0.8, 0.2)))
+                lineSegment(p(Vector2(0.5, 0.5)), p(Vector2(0.5, 0.8)))
+            }.attributes["data-layer"] = "layer2"
         }
 
         extend {

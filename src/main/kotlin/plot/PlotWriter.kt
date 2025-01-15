@@ -13,10 +13,9 @@ import org.openrndr.shape.Rectangle
 import org.openrndr.shape.Shape
 import org.openrndr.shape.ShapeContour
 import java.io.File
-import kotlin.collections.component1
-import kotlin.collections.component2
 import kotlin.math.abs
 import kotlin.math.ceil
+import kotlin.text.get
 
 
 val logger = KotlinLogging.logger { }
@@ -31,7 +30,7 @@ private val DEFAULT_OPTIONS = mutableMapOf(
     "speed_penup" to 35,
 )
 
-private const val DEFAULT_LAYER_NAME = "base"
+private const val DEFAULT_LAYER_NAME = "default"
 
 private const val CONVERSION_FACTOR = 96 / 25.4
 
@@ -538,16 +537,18 @@ internal fun groupContoursByLayerAndColor(
     }
 
     composition.root.visitAll {
-        if (this is ShapeNode) {
-            val currentColor = getEffectiveColor(this.stroke)
-
-            if (this.attributes.containsKey("layer")) {
-                currentLayer = this.attributes["layer"] ?: currentLayer
+        when (this) {
+            is GroupNode -> {
+                this.attributes["data-layer"]?.let { currentLayer = it }
             }
-            ensureLayerAndColorArePresent(currentLayer, currentColor)
-            contourLayers[currentLayer]?.get(currentColor)!! += this.shape.transformContours(
-                displayScale, border, paperOffset
-            )
+            is ShapeNode -> {
+                val currentColor = getEffectiveColor(this.stroke)
+                ensureLayerAndColorArePresent(currentLayer, currentColor)
+                contourLayers[currentLayer]?.get(currentColor)?.let { contours ->
+                    contours += this.shape.transformContours(displayScale, border, paperOffset)
+                }
+            }
+            else -> {}
         }
     }
     return contourLayers
