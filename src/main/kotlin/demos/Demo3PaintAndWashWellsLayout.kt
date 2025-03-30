@@ -18,7 +18,7 @@ import org.openrndr.shape.Triangle
 import plot.DrawTool
 import plot.PaperSize
 import plot.PlotConfig
-import plot.saveAxiDrawFileSet
+import plot.saveFileSet
     
 /**
  * id: 597a4d58-06b3-4569-87b7-c229093b5a67
@@ -114,8 +114,10 @@ fun main() = application {
         keyboard.keyDown.listen {
             when (it.key) {
                 KEY_SPACEBAR -> {
-                    val filename = "screenshots/${namedTimestamp()}"
-                    composition.saveAxiDrawFileSet(filename, plotConfig)
+                    composition.saveFileSet(
+                        namedTimestamp(),
+                        plotConfig
+                    )
                 }
             }
         }

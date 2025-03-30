@@ -1,7 +1,5 @@
 package demos
 
-import plot.PaperSize
-import plot.PlotConfig
 import org.openrndr.KEY_SPACEBAR
 import org.openrndr.application
 import org.openrndr.color.ColorRGBa
@@ -13,8 +11,10 @@ import org.openrndr.namedTimestamp
 import org.openrndr.shape.Circle
 import org.openrndr.shape.LineSegment
 import org.openrndr.shape.Rectangle
-import plot.saveAxiDrawFileSet
-    
+import plot.PaperSize
+import plot.PlotConfig
+import plot.saveFileSet
+
 /**
  * id: 3cc3d17a-8050-4ac7-940f-b52ecdf77d91
  * description: New sketch
@@ -70,8 +70,10 @@ fun main() = application {
         keyboard.keyDown.listen {
             when (it.key) {
                 KEY_SPACEBAR -> {
-                    val filename = "screenshots/${namedTimestamp()}"
-                    composition.saveAxiDrawFileSet(filename, plotConfig)
+                    composition.saveFileSet(
+                        namedTimestamp(),
+                        plotConfig
+                    )
                 }
             }
         }

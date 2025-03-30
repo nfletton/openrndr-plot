@@ -12,7 +12,7 @@ import org.openrndr.shape.Rectangle
 import plot.DrawTool
 import plot.PaperSize
 import plot.PlotConfig
-import plot.saveAxiDrawFileSet
+import plot.saveFileSet
 
 /**
  * id: 6f7ca73b-f126-431b-958c-f4dbb7dc6977
@@ -96,8 +96,10 @@ fun main() {
             keyboard.keyDown.listen {
                 when (it.key) {
                     KEY_SPACEBAR -> {
-                        val filename = "screenshots/${namedTimestamp()}"
-                        composition.saveAxiDrawFileSet(filename, plotConfig)
+                        composition.saveFileSet(
+                            namedTimestamp(),
+                            plotConfig
+                        )
                     }
                 }
             }

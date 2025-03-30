@@ -4,6 +4,7 @@ import io.github.oshai.kotlinlogging.KotlinLogging
 import org.openrndr.color.ColorRGBa
 import org.openrndr.color.rgb
 import org.openrndr.extra.composition.*
+import org.openrndr.extra.gui.GUI
 import org.openrndr.extra.noise.Random
 import org.openrndr.extra.svg.saveToFile
 import org.openrndr.math.Vector2
@@ -13,9 +14,11 @@ import org.openrndr.shape.Rectangle
 import org.openrndr.shape.Shape
 import org.openrndr.shape.ShapeContour
 import java.io.File
+import kotlin.collections.component1
+import kotlin.collections.component2
+import kotlin.collections.set
 import kotlin.math.abs
 import kotlin.math.ceil
-import kotlin.text.get
 
 
 val logger = KotlinLogging.logger { }
@@ -290,7 +293,7 @@ internal class RefillData(private val config: PlotConfig) {
  * The files include: the intermediate command file to drive the AxiDraw, an SVG of the
  * plot surface layout and the SVG file of the plot itself
  */
-fun Composition.saveAxiDrawFileSet(baseFilename: String, config: PlotConfig) {
+fun Composition.saveFileSet(id: String, config: PlotConfig, gui: GUI? = null) {
     val groupedContours =
         groupContoursByLayerAndColor(this, config.displayScale, config.border, config.paperOffset)
     orderContours(groupedContours)
@@ -298,15 +301,22 @@ fun Composition.saveAxiDrawFileSet(baseFilename: String, config: PlotConfig) {
     val refillData = RefillData(config)
     val plotData = generatePlotData(groupedContours, refillData, config)
 
-    writeAxiDrawFile(plotData, baseFilename)
-    saveLayoutToSvgFile(baseFilename, refillData, config)
-    savePlotToSvgFile(config.displayScale, config.border, baseFilename)
+    val directory = "screenshots/$id/"
+
+    File(directory).mkdirs()
+
+    writeAxiDrawFiles(plotData, directory)
+    writeLayoutSvgFile(refillData, config, directory)
+    writePlotSvgFile(config.displayScale, config.border, directory)
+    gui?.saveParameters(File("${directory}parameters.json"))
 }
 
 
-private fun writeAxiDrawFile(data: String, baseFilename: String) {
-    val axiDrawFile = File("${baseFilename}.txt")
-    axiDrawFile.writeText(data)
+private fun writeAxiDrawFiles(data: List<String>, directory: String) {
+    data.forEachIndexed { i, layerData ->
+        val axiDrawFile = File("${directory}layer_$i.txt")
+        axiDrawFile.writeText(layerData)
+    }
 }
 
 /**
@@ -314,7 +324,7 @@ private fun writeAxiDrawFile(data: String, baseFilename: String) {
  * based on paper size: (i) it scales the SVG document to the desired paper
  * size, (ii) scales the sketch to the paper size.
  */
-fun Composition.savePlotToSvgFile(displayScale: Double, border: Vector2, filename: String) {
+fun Composition.writePlotSvgFile(displayScale: Double, border: Vector2, directory: String) {
     val origTransform = root.transform
     val origWidth = style.width
     val origHeight = style.height
@@ -325,7 +335,7 @@ fun Composition.savePlotToSvgFile(displayScale: Double, border: Vector2, filenam
         }
     style.width = Length.Pixels.fromMillimeters(style.width.value / displayScale)
     style.height = Length.Pixels.fromMillimeters(style.height.value / displayScale)
-    saveToFile(File("$filename.svg"))
+    saveToFile(File("${directory}plot.svg"))
     root.transform = origTransform
     style.width = origWidth
     style.height = origHeight
@@ -338,17 +348,18 @@ fun Composition.savePlotToSvgFile(displayScale: Double, border: Vector2, filenam
  */
 internal fun generatePlotData(
     contourLayers: ContourLayers, refillData: RefillData, config: PlotConfig
-): String {
-    return buildString {
-        append(config.defaultOptions.map { (key, value) -> "$key ${value}\n" }.joinToString(""))
-        append("::END_OPTIONS::\n")
-        append(refillData.cmdDefinitions())
-        append(config.utilCommands)
-        append("::END_DEFINITIONS::\n")
-        append("penup\n")
-        var location = Vector2.ZERO
-        var currentColor = ColorRGBa.BLACK
-        contourLayers.forEach { (layerName, layer) ->
+): List<String> {
+    val layers = mutableListOf<String>()
+    contourLayers.forEach { (layerName, layer) ->
+        val layerOutput = buildString {
+            append(config.defaultOptions.map { (key, value) -> "$key ${value}\n" }.joinToString(""))
+            append("::END_OPTIONS::\n")
+            append(refillData.cmdDefinitions())
+            append(config.utilCommands)
+            append("::END_DEFINITIONS::\n")
+            append("penup\n")
+            var location = Vector2.ZERO
+            var currentColor = ColorRGBa.BLACK
             append("# Layer: ${layerName}\n")
             layer.forEach { (color, contours) ->
                 if (contours.isNotEmpty()) {
@@ -374,9 +385,11 @@ internal fun generatePlotData(
                     location = contours.last().segments.last().end
                 }
             }
+            append("go_home\n")
         }
-        append("go_home\n")
+        layers += layerOutput
     }
+    return layers.toList()
 }
 
 /**
@@ -439,7 +452,7 @@ private fun ShapeContour.toPath(config: PlotConfig): List<Vector2> {
  * Rotate the points of the path by an offset if the path is closed.
  */
 private fun List<Vector2>.rotate(): List<Vector2> {
-    if (this.first() != this.last()) return this
+    if (this.first() != this.last() || this.size <= 10) return this
 
     val offset = Random.int(0, this.lastIndex - 1)
     if (offset != 0) {
@@ -615,7 +628,7 @@ private fun findClosestContour(point: Vector2, contours: MutableList<ShapeContou
  * The layout includes: The paint and wash wells,
  * the paint and wash stir paths and the paper boundary
  */
-internal fun saveLayoutToSvgFile(filename: String, refillData: RefillData, config: PlotConfig) {
+internal fun writeLayoutSvgFile(refillData: RefillData, config: PlotConfig, directory: String) {
     val layout = drawComposition {
         strokeWeight = 0.5
         composition(createPaletteLayout(config.paintWells, config.washWells))
@@ -635,7 +648,7 @@ internal fun saveLayoutToSvgFile(filename: String, refillData: RefillData, confi
     layout.root.transform = transform { scale(CONVERSION_FACTOR) }
     layout.style.width = Length.Pixels.fromMillimeters(config.axiDrawTravel.x)
     layout.style.height = Length.Pixels.fromMillimeters(config.axiDrawTravel.y)
-    layout.saveToFile(File("${filename}_Layout.svg"))
+    layout.saveToFile(File("${directory}layout.svg"))
 }
 
 internal fun CompositionDrawer.addPathContours(paths: List<List<Vector2>>) {
