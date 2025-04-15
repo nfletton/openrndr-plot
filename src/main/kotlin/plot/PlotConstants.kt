@@ -1,6 +1,9 @@
 package plot
 
-sealed class PaperSize(open val width: Double, open val height: Double) {
+sealed class PaperSize(width: Double, height: Double) {
+    val x = width
+    val y = height
+
     // ISO
     data object A0 : PaperSize(841.0, 1189.0)
     data object A1 : PaperSize(594.0, 841.0)
@@ -33,11 +36,15 @@ sealed class PaperSize(open val width: Double, open val height: Double) {
     data object ART_18x24 : PaperSize(457.0, 610.0)
     data object ART_22x30 : PaperSize(559.0, 762.0)
 
-    data class Custom(override val width: Double, override val height: Double) :
+    data class Custom(private val width: Double, private val height: Double) :
         PaperSize(width, height)
 
     fun aspectRatio(): Double {
-        return width / height
+        return x / y
+    }
+
+    fun landscape(): PaperSize {
+        return Custom(y, x)
     }
 }
 
