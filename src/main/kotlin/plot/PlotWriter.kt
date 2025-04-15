@@ -139,6 +139,10 @@ data class PlotConfig(
     private fun eachRefillOptionHasADefault() =
         defaultOptions.keys.containsAll(refillOptions.keys)
 
+    fun toMillimetres(value: Double): Double {
+        return (value / displayScale).round(2)
+    }
+
     val hasRefillOptions: Boolean
         get() = refillOptions.isNotEmpty()
 
@@ -155,7 +159,8 @@ data class PlotConfig(
         get() = toolType == DrawTool.Dip || toolType == DrawTool.DipAndStir
 }
 
-internal typealias ContourColorGroups = MutableMap<ColorRGBa, MutableList<ShapeContour>>
+internal typealias ContourWeightGroups = MutableMap<Double, MutableList<ShapeContour>>
+internal typealias ContourColorGroups = MutableMap<ColorRGBa, ContourWeightGroups>
 internal typealias ContourLayers = MutableMap<String, ContourColorGroups>
 
 data class WellCommand(val location: Vector2, val commandName: String, val command: String)
@@ -312,10 +317,10 @@ fun Composition.saveFileSet(id: String, config: PlotConfig, gui: GUI? = null) {
 }
 
 
-private fun writeAxiDrawFiles(data: List<String>, directory: String) {
-    data.forEachIndexed { i, layerData ->
-        val axiDrawFile = File("${directory}layer_$i.txt")
-        axiDrawFile.writeText(layerData)
+private fun writeAxiDrawFiles(layers: Map<String, String>, directory: String) {
+    layers.forEach { (name, data) ->
+        val axiDrawFile = File("${directory}layer_$name.txt")
+        axiDrawFile.writeText(data)
     }
 }
 
@@ -348,8 +353,8 @@ fun Composition.writePlotSvgFile(displayScale: Double, border: Vector2, director
  */
 internal fun generatePlotData(
     contourLayers: ContourLayers, refillData: RefillData, config: PlotConfig
-): List<String> {
-    val layers = mutableListOf<String>()
+): Map<String, String> {
+    val layers = mutableMapOf<String, String>()
     contourLayers.forEach { (layerName, layer) ->
         val layerOutput = buildString {
             append(config.defaultOptions.map { (key, value) -> "$key ${value}\n" }.joinToString(""))
@@ -360,36 +365,41 @@ internal fun generatePlotData(
             append("penup\n")
             var location = Vector2.ZERO
             var currentColor = ColorRGBa.BLACK
+            var currentWeight = 0.0
             append("# Layer: ${layerName}\n")
-            layer.forEach { (color, contours) ->
-                if (contours.isNotEmpty()) {
-                    if (config.toolType == DrawTool.Pen && currentColor != color) {
-                        if (config.palette.containsKey(color)) {
-                            append("pause Change Color to ${config.palette[color]}\n")
-                            currentColor = color
+            layer.forEach { (color, weights) ->
+                weights.forEach { (weight, contours) ->
+                    if (contours.isNotEmpty()) {
+                        if (config.toolType == DrawTool.Pen && currentColor != color) {
+                            if (config.palette.containsKey(color)) {
+                                append("pause Change Color to ${config.palette[color]}\n")
+                                currentColor = color
+                            }
+                        } else if (config.toolType == DrawTool.Pen && currentWeight != weight) {
+                            append("pause Change Pen Size to ${config.toMillimetres(weight)}\n")
                         }
-                    }
-                    val paths = mergePaths(contours.map { it.toPath(config) }, config.pathTolerance)
+                        val paths = mergePaths(contours.map { it.toPath(config) }, config.pathTolerance)
 
-                    when {
-                        config.requiresDipping -> append(
-                            writePathsAndRefills(paths, refillData, config, color, location)
-                        )
+                        when {
+                            config.requiresDipping -> append(
+                                writePathsAndRefills(paths, refillData, config, color, location)
+                            )
 
-                        config.requiresManualRefills -> append(writePathsAndRefillPauses(paths, config))
+                            config.requiresManualRefills -> append(writePathsAndRefillPauses(paths, config))
 
-                        else -> paths.forEach {
-                            append("draw_path ${roundAndStringify(it)}\n")
+                            else -> paths.forEach {
+                                append("draw_path ${roundAndStringify(it)}\n")
+                            }
                         }
+                        location = contours.last().segments.last().end
                     }
-                    location = contours.last().segments.last().end
                 }
             }
             append("go_home\n")
         }
-        layers += layerOutput
+        layers[layerName] = layerOutput
     }
-    return layers.toList()
+    return layers.toMap()
 }
 
 /**
@@ -544,9 +554,10 @@ internal fun groupContoursByLayerAndColor(
     var currentLayer = DEFAULT_LAYER_NAME
     val contourLayers: ContourLayers = mutableMapOf(currentLayer to mutableMapOf())
 
-    fun ensureLayerAndColorArePresent(layerName: String, color: ColorRGBa) {
-        val layer = contourLayers.getOrPut(layerName) { mutableMapOf() }
-        layer.getOrPut(color) { mutableListOf() }
+    fun ensureNestedGroupsPresent(layerName: String, color: ColorRGBa, weight: Double) {
+        contourLayers.getOrPut(layerName) { mutableMapOf() }
+            .getOrPut(color) { mutableMapOf() }
+            .getOrPut(weight) { mutableListOf() }
     }
 
     composition.root.visitAll {
@@ -556,9 +567,12 @@ internal fun groupContoursByLayerAndColor(
             }
             is ShapeNode -> {
                 val currentColor = getEffectiveColor(this.stroke)
-                ensureLayerAndColorArePresent(currentLayer, currentColor)
-                contourLayers[currentLayer]?.get(currentColor)?.let { contours ->
-                    contours += this.shape.transformContours(displayScale, border, paperOffset)
+                val currentWeight = this.strokeWeight
+                ensureNestedGroupsPresent(currentLayer, currentColor, currentWeight)
+                contourLayers[currentLayer]!![currentColor]!![currentWeight].let { contours ->
+                    if (contours != null) {
+                        contours += this.shape.transformContours(displayScale, border, paperOffset)
+                    }
                 }
             }
             else -> {}
@@ -584,30 +598,32 @@ internal fun Shape.transformContours(
  */
 internal fun orderContours(contourLayers: ContourLayers) {
     contourLayers.forEach { (_, layer) ->
-        layer.forEach { (color, contours) ->
-            if (contours.isNotEmpty()) {
-                val ordered = mutableListOf<ShapeContour>()
-                while (contours.isNotEmpty()) {
-                    val lastPoint: Vector2 =
-                        if (ordered.isEmpty()) Vector2.ZERO else ordered.last().segments.last().end
-                    val closestContour = findClosestContour(lastPoint, contours)
-                    val isStartCloser =
-                        lastPoint.squaredDistanceTo(closestContour.segments.first().start) <= lastPoint.squaredDistanceTo(
-                            closestContour.segments.last().end
-                        )
-                    contours.remove(closestContour)
-                    if (isStartCloser) {
-                        ordered.add(closestContour)
-                    } else {
-                        ordered.add(
-                            ShapeContour.fromSegments(
-                                closestContour.segments.asReversed().map { it.reverse },
-                                closestContour.closed
+        layer.forEach { (color, weights) ->
+            weights.forEach { (weight, contours) ->
+                if (contours.isNotEmpty()) {
+                    val ordered = mutableListOf<ShapeContour>()
+                    while (contours.isNotEmpty()) {
+                        val lastPoint: Vector2 =
+                            if (ordered.isEmpty()) Vector2.ZERO else ordered.last().segments.last().end
+                        val closestContour = findClosestContour(lastPoint, contours)
+                        val isStartCloser =
+                            lastPoint.squaredDistanceTo(closestContour.segments.first().start) <= lastPoint.squaredDistanceTo(
+                                closestContour.segments.last().end
                             )
-                        )
+                        contours.remove(closestContour)
+                        if (isStartCloser) {
+                            ordered.add(closestContour)
+                        } else {
+                            ordered.add(
+                                ShapeContour.fromSegments(
+                                    closestContour.segments.asReversed().map { it.reverse },
+                                    closestContour.closed
+                                )
+                            )
+                        }
                     }
+                    weights[weight] = ordered
                 }
-                layer[color] = ordered
             }
         }
     }
@@ -641,8 +657,8 @@ internal fun writeLayoutSvgFile(refillData: RefillData, config: PlotConfig, dire
         rectangle(
             config.paperOffset.x,
             config.paperOffset.y,
-            config.paperSize.height,
-            config.paperSize.width
+            config.paperSize.y,
+            config.paperSize.x
         )
     }
     layout.root.transform = transform { scale(CONVERSION_FACTOR) }
