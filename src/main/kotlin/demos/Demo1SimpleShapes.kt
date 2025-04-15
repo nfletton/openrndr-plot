@@ -32,8 +32,8 @@ private val paper = PaperSize.A5.landscape()
 
 fun main() = application {
     configure {
-        width = (paper.x * screenScale).toInt()
-        height = (paper.y * screenScale).toInt()
+        width = (paper.width * screenScale).toInt()
+        height = (paper.height * screenScale).toInt()
         position = IntVector2(-width - 15, 50)
         title = "AxiDraw Demo 1 - Simple Shapes"
     }

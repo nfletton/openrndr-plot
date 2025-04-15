@@ -44,8 +44,8 @@ private val penWidth = listOf(0.1, 0.2, 0.3, 0.4, 0.5)
 fun main() {
     application {
         configure {
-            width = (paper.x * screenScale).toInt()
-            height = (paper.y * screenScale).toInt()
+            width = (paper.width * screenScale).toInt()
+            height = (paper.height * screenScale).toInt()
             position = IntVector2(-width - 15, 50)
             title = "AxiDraw Demo 8 - Lines at different pen widths"
         }

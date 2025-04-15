@@ -657,8 +657,8 @@ internal fun writeLayoutSvgFile(refillData: RefillData, config: PlotConfig, dire
         rectangle(
             config.paperOffset.x,
             config.paperOffset.y,
-            config.paperSize.y,
-            config.paperSize.x
+            config.paperSize.height,
+            config.paperSize.width
         )
     }
     layout.root.transform = transform { scale(CONVERSION_FACTOR) }
