@@ -28,17 +28,19 @@ private fun Double.fromMillimetres(): Double {
     return this * screenScale
 }
 
+private val paper = PaperSize.A5.landscape()
+
 fun main() = application {
     configure {
-        width = (PaperSize.A5.height * screenScale).toInt()
-        height = (PaperSize.A5.width * screenScale).toInt()
+        width = (paper.x * screenScale).toInt()
+        height = (paper.y * screenScale).toInt()
         position = IntVector2(-width - 15, 50)
         title = "AxiDraw Demo 1 - Simple Shapes"
     }
     program {
         val plotConfig = PlotConfig(
             displayScale = screenScale,
-            paperSize = PaperSize.A5,
+            paperSize = paper,
         )
 
         val border = Vector2(20.0.fromMillimetres(), 20.0.fromMillimetres())

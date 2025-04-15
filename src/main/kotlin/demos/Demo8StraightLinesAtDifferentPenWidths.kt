@@ -21,7 +21,7 @@ import plot.saveFileSet
  */
 
 private val screenScale: Double
-    get() = 3.0
+    get() = 3.2
 
 private fun Double.fromMillimetres(): Double {
     return this * screenScale
@@ -39,9 +39,7 @@ private val defaultOptions = mutableMapOf(
     "speed_penup" to 35,
 )
 
-private val refillOptions = mapOf(
-    "pen_pos_down" to 60,
-)
+private val penWidth = listOf(0.1, 0.2, 0.3, 0.4, 0.5)
 
 fun main() {
     application {
@@ -49,22 +47,16 @@ fun main() {
             width = (paper.x * screenScale).toInt()
             height = (paper.y * screenScale).toInt()
             position = IntVector2(-width - 15, 50)
-            title = "AxiDraw Demo 6 - Lines & Paint Well"
+            title = "AxiDraw Demo 8 - Lines at different pen widths"
         }
         program {
-            val paintWells = mapOf(
-                ColorRGBa.BLACK to listOf(Rectangle(0.0, 40.0, 37.0, 62.0)),
-            )
-
             val plotConfig = PlotConfig(
-                toolType = DrawTool.DipAndStir,
+                toolType = DrawTool.Pen,
                 displayScale = screenScale,
                 paperSize = paper,
 //            refillDistance = 100.0,
-                paintWells = paintWells,
                 paperOffset = Vector2(40.0, 0.0),
                 defaultOptions = defaultOptions,
-                refillOptions = refillOptions
             )
 
             val border = Vector2(15.0.fromMillimetres(), 15.0.fromMillimetres())
@@ -82,10 +74,10 @@ fun main() {
                 stroke = ColorRGBa.BLACK
                 strokeWeight = 1.0
                 fill = null
-                strokeWeight = 0.6.fromMillimetres()
-                val lineCount = 20
+                val lineCount = 100
                 for (i in 0..lineCount) {
                     val yPos = border.y + i * (drawArea.height / lineCount)
+                    strokeWeight = penWidth[i % penWidth.size].fromMillimetres()
                     lineSegment(Vector2(border.x, yPos), Vector2(border.x + drawArea.width, yPos))
                 }
             }

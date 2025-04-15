@@ -33,10 +33,12 @@ private fun Double.fromMillimetres(): Double {
     return this * screenScale
 }
 
+private val paper = PaperSize.ART_11x14.landscape()
+
 fun main() = application {
     configure {
-        width = (PaperSize.ART_11x14.height * screenScale).toInt()
-        height = (PaperSize.ART_11x14.width * screenScale).toInt()
+        width = (paper.x * screenScale).toInt()
+        height = (paper.y * screenScale).toInt()
         position = IntVector2(-width - 15, 50)
         title = "AxiDraw Demo 3 - Pain and Wash Wells"
     }
@@ -67,7 +69,7 @@ fun main() = application {
         val plotConfig = PlotConfig(
             toolType = DrawTool.DipAndStir,
             displayScale = screenScale,
-            paperSize = PaperSize.ART_11x14,
+            paperSize = paper,
             palette = colorPalette,
             refillDistance = 200.0,
             paintWells = paintWells,
