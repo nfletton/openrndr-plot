@@ -1,9 +1,6 @@
 package plot
 
-sealed class PaperSize(x: Double, y: Double) {
-    val width = x
-    val height = y
-
+sealed class PaperSize(val width: Double, val height: Double) {
     // ISO
     data object A0 : PaperSize(841.0, 1189.0)
     data object A1 : PaperSize(594.0, 841.0)
@@ -36,21 +33,16 @@ sealed class PaperSize(x: Double, y: Double) {
     data object ART_18x24 : PaperSize(457.0, 610.0)
     data object ART_22x30 : PaperSize(559.0, 762.0)
 
-    data class Custom(private val x: Double, private val y: Double) :
-        PaperSize(x, y)
+    class Custom(width: Double, height: Double) : PaperSize(width, height)
 
-    fun aspectRatio(): Double {
-        return width / height
-    }
+    fun aspectRatio(): Double = width / height
 
-    fun landscape(): PaperSize {
-        return Custom(height, width)
-    }
+    fun landscape(): PaperSize = Custom(height, width)
 }
 
 enum class AxiDrawTravel(val x: Double, val y: Double) {
     V3A3(430.0, 297.0),      // V3/A3 and SE/A3
     V3XLX(595.0, 218.0),      // AxiDraw V3 XLX
     SEA1(864.0, 594.0),      // AxiDraw SE/A1
-    SEA2(594.0, 432.0),      // AxiDraw SE/A2
+    SEA2(594.0, 432.0)       // AxiDraw SE/A2
 }
